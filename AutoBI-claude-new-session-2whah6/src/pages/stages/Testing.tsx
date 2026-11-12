@@ -51,7 +51,7 @@ export default function TestingStage({ p }: { p: Project }) {
         <Button size="sm" variant="primary" icon={<PlayCircle className="h-3.5 w-3.5" />} loading={busy} onClick={() => executeTests(p.id)}>Run automated tests</Button>
         <Button size="sm" variant="ghost" icon={<RefreshCw className="h-3.5 w-3.5" />} disabled={busy} onClick={() => confirm('Regenerate the test suite from the current dashboard?') && runTestingAgent(p.id)}>Regenerate</Button>
       </div>
-      {(tab === 'technical' || tab === 'qc') && <CaseTable key={tab} p={p} suite={tab} onOpen={setOpen} onAdd={() => setAdding(tab)} />}
+      {(tab === 'technical' || tab === 'qc') && <CaseTable key={tab} p={p} suite={tab} onOpen={setOpen} onAdd={() => setAdding(tab)} onSwitch={setTab} />}
       {tab === 'uat' && (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <UatTab p={p} onOpen={setOpen} />
@@ -72,7 +72,7 @@ export default function TestingStage({ p }: { p: Project }) {
   );
 }
 
-function CaseTable({ p, suite, onOpen, onAdd }: { p: Project; suite: 'technical' | 'qc'; onOpen: (id: string) => void; onAdd: () => void }) {
+function CaseTable({ p, suite, onOpen, onAdd, onSwitch }: { p: Project; suite: 'technical' | 'qc'; onOpen: (id: string) => void; onAdd: () => void; onSwitch: (t: Tab) => void }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [st, setSt] = useState('');
@@ -82,6 +82,9 @@ function CaseTable({ p, suite, onOpen, onAdd }: { p: Project; suite: 'technical'
   const cases = all.filter((c) => (!cat || c.category === cat) && (!st || c.status === st) && (!q || `${c.id} ${c.component} ${c.objective} ${c.page}`.toLowerCase().includes(q.toLowerCase())));
   const cats = [...new Set(all.map((c) => c.category))];
   const qc = suite === 'qc';
+  // the header counters span both suites; when this tab has no match, say where the matches are
+  const other: 'technical' | 'qc' = qc ? 'technical' : 'qc';
+  const elsewhere = cases.length || (!st && !q) ? 0 : p.testing!.cases.filter((c) => c.suite === other && (!st || c.status === st) && (!q || `${c.id} ${c.component} ${c.objective} ${c.page}`.toLowerCase().includes(q.toLowerCase()))).length;
   return (
     <Card bodyClass="p-0">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
@@ -107,6 +110,18 @@ function CaseTable({ p, suite, onOpen, onAdd }: { p: Project; suite: 'technical'
           </tr>
         </thead>
         <tbody>
+          {!cases.length && (
+            <tr>
+              <td className="td py-6 text-center text-xs text-slate-500" colSpan={qc ? 7 : 8} data-testid="no-match">
+                No {st ? `"${st}" ` : ''}test cases match in {SUITE_LABEL[suite]}.
+                {elsewhere > 0 && (
+                  <> {elsewhere} matching case{elsewhere === 1 ? ' is' : 's are'} in {SUITE_LABEL[other]}.{' '}
+                    <button className="font-medium text-brand-700 hover:underline" onClick={() => onSwitch(other)}>Show {SUITE_LABEL[other]}</button>
+                  </>
+                )}
+              </td>
+            </tr>
+          )}
           {cases.slice(0, limit).map((c) => (
             <tr key={c.id} className="cursor-pointer align-top hover:bg-slate-50" onClick={() => onOpen(c.id)} data-testid="test-row">
               <td className="td text-xs text-slate-500" title={c.id}>{all.indexOf(c) + 1}</td>
