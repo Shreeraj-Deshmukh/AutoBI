@@ -354,7 +354,7 @@ export function median(ns: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-function isOrdinal(keys: string[]) {
+export function isOrdinal(keys: string[]) {
   const real = keys.filter((k) => k !== BLANK && k !== UNMATCHED);
   // tiers / dates / plain numbers, and numeric buckets such as "0-7 days", "8-14 days", "30+ days"
   return real.length > 0 && (real.every((k) => /^(tier|level|grade|q|wave|phase|band|decile)\s*\d/i.test(k) || /^\d{4}-/.test(k)) || real.every((k) => /^-?\d+(\.\d+)?$/.test(k)) || real.every((k) => /^\d+\s*(?:[-–]\s*\d+|\+)/.test(k)));

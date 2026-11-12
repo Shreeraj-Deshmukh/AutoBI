@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hammer, ExternalLink, CheckCircle2, XCircle, RefreshCw, Code2 } from 'lucide-react';
+import { Hammer, ExternalLink, CheckCircle2, XCircle, RefreshCw, Code2, Download } from 'lucide-react';
 import type { Project } from '@/types';
+import type { PowerBiExport } from '@/lib/powerbi';
 import StageLayout from '@/components/StageLayout';
 import AgentPanel, { RunView } from '@/components/AgentPanel';
 import { Button, Callout, Card, Empty } from '@/components/ui';
@@ -18,6 +20,18 @@ export default function DevelopmentStage({ p }: { p: Project }) {
   const b = p.dashboard;
   const run = p.runs.find((r) => r.agentId === 'development');
   const stale = b && p.design && b.designVersion !== p.design.version;
+  const [pbi, setPbi] = useState<{ busy?: boolean; error?: string; done?: { name: string; summary: PowerBiExport['summary']; warnings: string[] } }>({});
+  const exportPowerBi = async () => {
+    setPbi({ busy: true });
+    try {
+      // loaded on demand: the exporter (zip, theme, PBIR/TMDL writers) is only needed here
+      const { downloadPowerBi } = await import('@/lib/powerbi');
+      const x = downloadPowerBi(p);
+      setPbi({ done: { name: x.name, summary: x.summary, warnings: x.warnings } });
+    } catch (e) {
+      setPbi({ error: (e as Error).message });
+    }
+  };
 
   const main = (
     <>
@@ -37,10 +51,20 @@ export default function DevelopmentStage({ p }: { p: Project }) {
             <div className="ml-auto flex gap-2">
               <Button size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} loading={busy} disabled={p.design?.status !== 'approved'} onClick={() => runDevelopmentAgent(p.id)}>Rebuild</Button>
               <Button size="sm" icon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => nav(`/p/${p.id}/preview`)}>Open full-screen</Button>
+              <Button size="sm" icon={<Download className="h-3.5 w-3.5" />} loading={pbi.busy} onClick={exportPowerBi} title="Download a Power BI project (.pbip) with the data embedded – unzip and open it in Power BI Desktop">Download for Power BI</Button>
               <Button size="sm" variant="primary" onClick={() => nav(`/p/${p.id}/testing`)}>Continue to Testing →</Button>
             </div>
           </div>
           {b.warnings.length > 0 && <Callout tone="warning" title={`${b.warnings.length} build warning(s)`}>{b.warnings.join(' ')}</Callout>}
+          {pbi.error && <Callout tone="error" title="Power BI export failed">{pbi.error}</Callout>}
+          {pbi.done && (
+            <Callout tone="success" title={`Power BI project downloaded: ${pbi.done.name}_PowerBI.zip`}>
+              {pbi.done.summary.pages} pages, {pbi.done.summary.visuals} visuals, {pbi.done.summary.measures} DAX measures, {pbi.done.summary.tables} tables with the data embedded. Unzip it, open <b>{pbi.done.name}.pbip</b> in Power BI Desktop and click <b>Refresh</b> once.
+              {pbi.done.warnings.length > 0 && (
+                <details className="mt-1"><summary className="cursor-pointer text-xs">{pbi.done.warnings.length} export note(s)</summary><ul className="mt-1 list-disc pl-5 text-xs">{pbi.done.warnings.map((w) => <li key={w}>{w}</li>)}</ul></details>
+              )}
+            </Callout>
+          )}
           {engine && p.foundation && <DashboardView spec={b.spec} engine={engine} foundation={p.foundation} />}
           {FEATURES.rowLevelSecurity && <AccessCard p={p} />}
           <details className="card px-4 py-3">

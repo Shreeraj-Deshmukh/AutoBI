@@ -7,3 +7,6 @@ playwright-report
 .env
 .env.local
 .env.*.local
+
+# Power BI exports from scripts/export-powerbi.ts
+powerbi-export/
