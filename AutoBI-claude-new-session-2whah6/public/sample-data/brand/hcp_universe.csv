@@ -1,0 +1,421 @@
+HCP_ID,HCP_Name,Specialty,Decile,Segment,Territory_ID,State,Target_Flag
+H100013,"Yusuf Rossi, DO",Oncology,3,Maintain,T008,AL,Non-Target
+H100026,"Hiro Park, MD",Hematology,5,Grow,T015,OH,Non-Target
+H100039,"Irene Carter, MD",Oncology,7,Grow,T022,OR,Target
+H100052,"Sanjay Jensen, MD",Hematology,1,Low Potential,T005,PA,Non-Target
+H100065,"Wen Hoffman, MD",Internal Medicine,4,Maintain,T012,TX,Non-Target
+H100078,"Jamal Lindqvist, NP",Internal Medicine,2,Low Potential,T019,CA,Non-Target
+H100091,"Pedro Jensen, MD",Hematology,5,Grow,T002,CT,Non-Target
+H100104,"Deepak Park, MD",Oncology,2,Low Potential,T009,FL,Non-Target
+H100117,"Luis Quinn, MD",Internal Medicine,1,Low Potential,T016,KY,Non-Target
+H100130,"Deepak Fischer, MD",Pulmonology,4,Maintain,T023,CO,Non-Target
+H100143,"Hiro Gupta, MD",Hematology,1,Low Potential,T006,MD,Non-Target
+H100156,"Wen Iyer, NP",Internal Medicine,10,High Value,T013,IL,Target
+H100169,"Pedro Dominguez, MD",Hematology,3,Maintain,T020,CA,Non-Target
+H100182,"Brian Gupta, DO",Hematology,2,Low Potential,T003,NY,Non-Target
+H100195,"Karen Carter, DO",Internal Medicine,3,Maintain,T010,FL,Non-Target
+H100208,"Sanjay Quinn, MD",Pulmonology,1,Low Potential,T017,MN,Non-Target
+H100221,"Brian Novak, MD",Internal Medicine,4,Maintain,T024,AZ,Non-Target
+H100234,"Brian Iyer, NP",Nurse Practitioner,4,Maintain,T007,GA,Non-Target
+H100247,"Grace Hoffman, DO",Oncology,5,Grow,T014,IN,Non-Target
+H100260,"Nikhil Carter, NP",Internal Medicine,5,Grow,T021,WA,Non-Target
+H100273,"Karen Varga, MD",Oncology,1,Low Potential,T004,NJ,Non-Target
+H100286,"Rosa Turner, NP",Hematology,6,Grow,T011,TX,Target
+H100299,"Jamal Kowalski, NP",Oncology,2,Low Potential,T018,WI,Non-Target
+H100312,"Elena Novak, MD",Pulmonology,5,Grow,T001,MA,Non-Target
+H100325,"Luis Jensen, MD",Pulmonology,5,Grow,T008,AL,Non-Target
+H100338,"Nikhil Novak, DO",Pulmonology,9,High Value,T015,OH,Target
+H100351,"Rosa Ellis, MD",Hematology,6,Grow,T022,OR,Target
+H100364,"Grace Sato, MD",Internal Medicine,1,Low Potential,T005,PA,Non-Target
+H100377,"Deepak Carter, MD",Pulmonology,4,Maintain,T012,TX,Non-Target
+H100390,"Brian Mehta, MD",Oncology,5,Grow,T019,CA,Non-Target
+H100403,"Sanjay Lindqvist, MD",Nurse Practitioner,2,Low Potential,T002,CT,Non-Target
+H100416,"Anna Lindqvist, MD",Hematology,7,Grow,T009,FL,Target
+H100429,"Brian Lindqvist, MD",Oncology,2,Low Potential,T016,KY,Non-Target
+H100442,"Tara Jensen, MD",Internal Medicine,1,Low Potential,T023,CO,Non-Target
+H100455,"Jamal Fischer, DO",Hematology,5,Grow,T006,MD,Non-Target
+H100468,"Rosa Novak, NP",Oncology,4,Maintain,T013,IL,Non-Target
+H100481,"Maya Varga, MD",Pulmonology,5,Grow,T020,CA,Non-Target
+H100494,"Karen Hoffman, MD",Internal Medicine,5,Grow,T003,NY,Non-Target
+H100507,"Karen Sato, MD",Pulmonology,2,Low Potential,T010,FL,Non-Target
+H100520,"Irene Iyer, MD",Hematology,8,High Value,T017,MN,Target
+H100533,"Brian Quinn, MD",Nurse Practitioner,4,Maintain,T024,AZ,Non-Target
+H100546,"Elena Abbott, MD",Hematology,2,Low Potential,T007,GA,Non-Target
+H100559,"Farid Mehta, DO",Internal Medicine,1,Low Potential,T014,IN,Non-Target
+H100572,"Deepak Quinn, MD",Internal Medicine,3,Maintain,T021,WA,Non-Target
+H100585,"Victor Jensen, MD",Oncology,8,High Value,T004,NJ,Target
+H100598,"Luis Turner, MD",Oncology,6,Grow,T011,TX,Target
+H100611,"Yusuf Abbott, MD",Nurse Practitioner,,Low Potential,T018,WI,Non-Target
+H100624,"Brian Carter, NP",Nurse Practitioner,10,High Value,T001,MA,Target
+H100637,"Rosa Underwood, MD",Oncology,6,Grow,T008,AL,Target
+H100650,"Anna Hoffman, MD",Oncology,7,Grow,T015,OH,Target
+H100663,"Sanjay Varga, MD",Pulmonology,10,High Value,T022,OR,Target
+H100676,"Yusuf Jensen, MD",Pulmonology,5,Grow,T005,PA,Non-Target
+H100689,"Elena Turner, MD",Oncology,1,Low Potential,T012,TX,Non-Target
+H100702,"Anna Quinn, MD",Oncology,4,Maintain,T019,CA,Non-Target
+H100715,"Olivia Carter, MD",Oncology,9,High Value,T002,CT,Target
+H100728,"Nikhil Dominguez, MD",Pulmonology,1,Low Potential,T009,FL,Non-Target
+H100741,"Karen Gupta, MD",Nurse Practitioner,4,Maintain,T016,KY,Non-Target
+H100754,"Chloe Bhatt, MD",Pulmonology,4,Maintain,T023,CO,Non-Target
+H100767,"Wen Turner, MD",Internal Medicine,2,Low Potential,T006,MD,Non-Target
+H100780,"Brian Sato, MD",Oncology,5,Grow,T013,IL,Non-Target
+H100793,"Elena Sato, MD",Pulmonology,2,Low Potential,T020,CA,Non-Target
+H100806,"Sanjay Okoye, MD",Oncology,4,Maintain,T003,NY,Non-Target
+H100819,"Hiro Hoffman, MD",Nurse Practitioner,1,Low Potential,T010,FL,Non-Target
+H100832,"Anna Ellis, MD",Hematology,3,Maintain,T017,MN,Non-Target
+H100845,"Luis Hoffman, MD",Hematology,1,Low Potential,T024,AZ,Non-Target
+H100858,"Sanjay Sato, DO",Internal Medicine,6,Grow,T007,GA,Target
+H100871,"Farid Quinn, MD",Oncology,1,Low Potential,T014,IN,Non-Target
+H100884,"Victor Novak, MD",Pulmonology,7,Grow,T021,WA,Target
+H100897,"Luis Lindqvist, MD",Oncology,3,Maintain,T004,NJ,Non-Target
+H100910,"Maya Sato, MD",Internal Medicine,9,High Value,T011,TX,Target
+H100923,"Brian Fischer, MD",Internal Medicine,9,High Value,T018,WI,Target
+H100936,"Irene Varga, MD",Oncology,4,Maintain,T001,MA,Non-Target
+H100949,"Rosa Quinn, DO",Internal Medicine,2,Low Potential,T008,AL,Non-Target
+H100962,"Victor Iyer, MD",Pulmonology,8,High Value,T015,OH,Target
+H100975,"Wen Quinn, DO",Oncology,1,Low Potential,T022,OR,Non-Target
+H100988,"Tara Turner, MD",Internal Medicine,3,Maintain,T005,PA,Non-Target
+H101001,"Irene Novak, MD",Hematology,5,Grow,T012,TX,Non-Target
+H101014,"Yusuf Underwood, MD",Oncology,1,Low Potential,T019,CA,Non-Target
+H101027,"Grace Carter, MD",Hematology,5,Grow,T002,CT,Non-Target
+H101040,"Rosa Jensen, DO",Internal Medicine,8,High Value,T009,FL,Target
+H101053,"Luis Underwood, MD",Internal Medicine,5,Grow,T016,KY,Non-Target
+H101066,"Maya Iyer, NP",Internal Medicine,4,Maintain,T023,CO,Non-Target
+H101079,"Irene Kowalski, MD",Oncology,4,Maintain,T006,MD,Non-Target
+H101092,"Wen Ellis, MD",Oncology,9,High Value,T013,IL,Target
+H101105,"Yusuf Varga, DO",Oncology,2,Low Potential,T020,CA,Non-Target
+H101118,"Sanjay Rossi, MD",Pulmonology,10,High Value,T003,NY,Target
+H101131,"Tara Lindqvist, MD",Hematology,4,Maintain,T010,FL,Non-Target
+H101144,"Maya Okoye, MD",Hematology,3,Maintain,T017,MN,Non-Target
+H101157,"Chloe Novak, MD",Oncology,3,Maintain,T024,AZ,Non-Target
+H101170,"Deepak Sato, MD",Pulmonology,6,Grow,T007,GA,Target
+H101183,"Rosa Park, NP",Internal Medicine,4,Maintain,T014,IN,Non-Target
+H101196,"Anna Dominguez, MD",Hematology,5,Grow,T021,WA,Non-Target
+H101209,"Hiro Turner, MD",Oncology,8,High Value,T004,NJ,Target
+H101222,"Grace Turner, MD",Nurse Practitioner,,Low Potential,T011,TX,Non-Target
+H101235,"Chloe Park, MD",Pulmonology,5,Grow,T018,WI,Non-Target
+H101248,"Luis Novak, MD",Pulmonology,1,Low Potential,T001,MA,Non-Target
+H101261,"Pedro Bhatt, MD",Pulmonology,2,Low Potential,T008,AL,Non-Target
+H101274,"Jamal Carter, MD",Oncology,6,Grow,T015,OH,Target
+H101287,"Grace Mehta, MD",Nurse Practitioner,3,Maintain,T022,OR,Non-Target
+H101300,"Rosa Sato, MD",Nurse Practitioner,6,Grow,T005,PA,Target
+H101313,"Wen Gupta, MD",Oncology,1,Low Potential,T012,TX,Non-Target
+H101326,"Hiro Kowalski, MD",Internal Medicine,4,Maintain,T019,CA,Non-Target
+H101339,"Farid Bhatt, MD",Hematology,9,High Value,T002,CT,Target
+H101352,"Wen Underwood, MD",Hematology,4,Maintain,T009,FL,Non-Target
+H101365,"Nikhil Sato, MD",Internal Medicine,7,Grow,T016,KY,Target
+H101378,"Maya Abbott, DO",Hematology,5,Grow,T023,CO,Non-Target
+H101391,"Victor Turner, MD",Oncology,3,Maintain,T006,MD,Non-Target
+H101404,"Maya Lindqvist, MD",Oncology,2,Low Potential,T013,IL,Non-Target
+H101417,"Nikhil Gupta, MD",Oncology,8,High Value,T020,CA,Target
+H101430,"Nikhil Iyer, MD",Pulmonology,1,Low Potential,T003,NY,Non-Target
+H101443,"Victor Fischer, MD",Oncology,3,Maintain,T010,FL,Non-Target
+H101456,"Grace Abbott, DO",Hematology,1,Low Potential,T017,MN,Non-Target
+H101469,"Chloe Fischer, MD",Hematology,6,Grow,T024,AZ,Target
+H101482,"Jamal Iyer, MD",Pulmonology,6,Grow,T007,GA,Target
+H101495,"Tara Quinn, MD",Nurse Practitioner,3,Maintain,T014,IN,Non-Target
+H101508,"Brian Turner, MD",Pulmonology,5,Grow,T021,WA,Non-Target
+H101521,"Sanjay Underwood, MD",Nurse Practitioner,2,Low Potential,T004,NJ,Non-Target
+H101534,"Elena Fischer, MD",Internal Medicine,5,Grow,T011,TX,Non-Target
+H101547,"Farid Varga, MD",Oncology,1,Low Potential,T018,WI,Non-Target
+H101560,"Karen Jensen, MD",Oncology,1,Low Potential,T001,MA,Non-Target
+H101573,"Elena Hoffman, MD",Hematology,1,Low Potential,T008,AL,Non-Target
+H101586,"Karen Underwood, MD",Nurse Practitioner,4,Maintain,T015,OH,Non-Target
+H101599,"Irene Fischer, MD",Nurse Practitioner,6,Grow,T022,OR,Target
+H101612,"Grace Kowalski, NP",Oncology,2,Low Potential,T005,PA,Non-Target
+H101625,"Farid Underwood, DO",Internal Medicine,3,Maintain,T012,TX,Non-Target
+H101638,"Jamal Okoye, MD",Oncology,10,High Value,T019,CA,Target
+H101651,"Jamal Gupta, MD",Pulmonology,2,Low Potential,T002,CT,Non-Target
+H101664,"Victor Mehta, MD",Hematology,2,Low Potential,T009,FL,Non-Target
+H101677,"Brian Rossi, NP",Nurse Practitioner,8,High Value,T016,KY,Target
+H101690,"Brian Bhatt, MD",Oncology,5,Grow,T023,CO,Non-Target
+H101703,"Chloe Underwood, NP",Oncology,2,Low Potential,T006,MD,Non-Target
+H101716,"Tara Kowalski, MD",Oncology,4,Maintain,T013,IL,Non-Target
+H101729,"Hiro Underwood, MD",Pulmonology,9,High Value,T020,CA,Target
+H101742,"Pedro Underwood, MD",Pulmonology,1,Low Potential,T003,NY,Non-Target
+H101755,"Chloe Jensen, MD",Hematology,4,Maintain,T010,FL,Non-Target
+H101768,"Sanjay Novak, MD",Hematology,1,Low Potential,T017,MN,Non-Target
+H101781,"Grace Novak, NP",Hematology,9,High Value,T024,AZ,Target
+H101794,"Tara Mehta, MD",Nurse Practitioner,4,Maintain,T007,GA,Non-Target
+H101807,"Wen Sato, MD",Internal Medicine,3,Maintain,T014,IN,Non-Target
+H101820,"Olivia Underwood, MD",Oncology,10,High Value,T021,WA,Target
+H101833,"Karen Park, MD",Nurse Practitioner,,Maintain,T004,NJ,Non-Target
+H101846,"Jamal Sato, MD",Internal Medicine,3,Maintain,T011,TX,Non-Target
+H101859,"Pedro Novak, MD",Nurse Practitioner,8,High Value,T018,WI,Target
+H101872,"Pedro Varga, NP",Pulmonology,6,Grow,T001,MA,Target
+H101885,"Pedro Mehta, MD",Nurse Practitioner,7,Grow,T008,AL,Target
+H101898,"Luis Okoye, MD",Pulmonology,4,Maintain,T015,OH,Non-Target
+H101911,"Rosa Okoye, MD",Internal Medicine,9,High Value,T022,OR,Target
+H101924,"Rosa Iyer, MD",Internal Medicine,4,Maintain,T005,PA,Non-Target
+H101937,"Anna Rossi, MD",Hematology,2,Low Potential,T012,TX,Non-Target
+H101950,"Chloe Gupta, MD",Pulmonology,8,High Value,T019,CA,Target
+H101963,"Farid Park, MD",Pulmonology,5,Grow,T002,CT,Non-Target
+H101976,"Grace Dominguez, MD",Internal Medicine,3,Maintain,T009,FL,Non-Target
+H101989,"Farid Rossi, MD",Pulmonology,10,High Value,T016,KY,Target
+H102002,"Grace Underwood, MD",Hematology,3,Maintain,T023,CO,Non-Target
+H102015,"Grace Fischer, MD",Internal Medicine,5,Grow,T006,MD,Non-Target
+H102028,"Irene Turner, MD",Hematology,4,Maintain,T013,IL,Non-Target
+H102041,"Tara Dominguez, MD",Oncology,4,Maintain,T020,CA,Non-Target
+H102054,"Deepak Kowalski, MD",Internal Medicine,3,Maintain,T003,NY,Non-Target
+H102067,"Wen Okoye, MD",Internal Medicine,6,Grow,T010,FL,Target
+H102080,"Yusuf Park, MD",Oncology,5,Grow,T017,MN,Non-Target
+H102093,"Grace Ellis, MD",Oncology,8,High Value,T024,AZ,Target
+H102106,"Pedro Kowalski, MD",Hematology,8,High Value,T007,GA,Target
+H102119,"Anna Novak, MD",Pulmonology,2,Low Potential,T014,IN,Non-Target
+H102132,"Brian Park, MD",Oncology,4,Maintain,T021,WA,Non-Target
+H102145,"Grace Lindqvist, MD",Internal Medicine,5,Grow,T004,NJ,Non-Target
+H102158,"Jamal Park, MD",Hematology,3,Maintain,T011,TX,Non-Target
+H102171,"Sanjay Fischer, MD",Hematology,3,Maintain,T018,WI,Non-Target
+H102184,"Deepak Iyer, MD",Pulmonology,7,Grow,T001,MA,Target
+H102197,"Irene Rossi, MD",Oncology,2,Low Potential,T008,AL,Non-Target
+H102210,"Irene Quinn, MD",Internal Medicine,5,Grow,T015,OH,Non-Target
+H102223,"Olivia Varga, MD",Internal Medicine,2,Low Potential,T022,OR,Non-Target
+H102236,"Wen Rossi, MD",Nurse Practitioner,7,Grow,T005,PA,Target
+H102249,"Sanjay Dominguez, MD",Oncology,10,High Value,T012,TX,Target
+H102262,"Olivia Mehta, MD",Nurse Practitioner,2,Low Potential,T019,CA,Non-Target
+H102275,"Nikhil Turner, MD",Oncology,4,Maintain,T002,CT,Non-Target
+H102288,"Luis Bhatt, DO",Internal Medicine,7,Grow,T009,FL,Target
+H102301,"Anna Abbott, MD",Internal Medicine,4,Maintain,T016,KY,Non-Target
+H102314,"Chloe Iyer, MD",Pulmonology,5,Grow,T023,CO,Non-Target
+H102327,"Olivia Iyer, DO",Hematology,2,Low Potential,T006,MD,Non-Target
+H102340,"Deepak Bhatt, NP",Internal Medicine,9,High Value,T013,IL,Target
+H102353,"Maya Rossi, MD",Pulmonology,1,Low Potential,T020,CA,Non-Target
+H102366,"Farid Lindqvist, MD",Internal Medicine,7,Grow,T003,NY,Target
+H102379,"Yusuf Hoffman, MD",Hematology,7,Grow,T010,FL,Target
+H102392,"Olivia Bhatt, MD",Pulmonology,4,Maintain,T017,MN,Non-Target
+H102405,"Grace Iyer, MD",Internal Medicine,3,Maintain,T024,AZ,Non-Target
+H102418,"Maya Bhatt, MD",Nurse Practitioner,7,Grow,T007,GA,Target
+H102431,"Olivia Dominguez, DO",Oncology,6,Grow,T014,IN,Target
+H102444,"Victor Abbott, MD",Oncology,,High Value,T021,WA,Target
+H102457,"Hiro Okoye, MD",Pulmonology,4,Maintain,T004,NJ,Non-Target
+H102470,"Hiro Lindqvist, MD",Oncology,4,Maintain,T011,TX,Non-Target
+H102483,"Luis Iyer, NP",Oncology,4,Maintain,T018,WI,Non-Target
+H102496,"Chloe Hoffman, DO",Oncology,7,Grow,T001,MA,Target
+H102509,"Victor Underwood, MD",Oncology,5,Grow,T008,AL,Non-Target
+H102522,"Victor Varga, MD",Oncology,2,Low Potential,T015,OH,Non-Target
+H102535,"Yusuf Carter, MD",Nurse Practitioner,4,Maintain,T022,OR,Non-Target
+H102548,"Deepak Varga, NP",Hematology,3,Maintain,T005,PA,Non-Target
+H102561,"Wen Bhatt, DO",Pulmonology,2,Low Potential,T012,TX,Non-Target
+H102574,"Tara Rossi, NP",Oncology,2,Low Potential,T019,CA,Non-Target
+H102587,"Rosa Kowalski, MD",Oncology,2,Low Potential,T002,CT,Non-Target
+H102600,"Karen Rossi, NP",Internal Medicine,1,Low Potential,T009,FL,Non-Target
+H102613,"Luis Varga, MD",Pulmonology,3,Maintain,T016,KY,Non-Target
+H102626,"Maya Dominguez, MD",Oncology,6,Grow,T023,CO,Target
+H102639,"Maya Mehta, MD",Hematology,2,Low Potential,T006,MD,Non-Target
+H102652,"Olivia Novak, MD",Oncology,4,Maintain,T013,IL,Non-Target
+H102665,"Irene Mehta, MD",Hematology,1,Low Potential,T020,CA,Non-Target
+H102678,"Jamal Varga, MD",Internal Medicine,7,Grow,T003,NY,Target
+H102691,"Karen Abbott, MD",Hematology,4,Maintain,T010,FL,Non-Target
+H102704,"Luis Carter, MD",Internal Medicine,7,Grow,T017,MN,Target
+H102717,"Elena Jensen, NP",Internal Medicine,5,Grow,T024,AZ,Non-Target
+H102730,"Chloe Carter, MD",Hematology,5,Grow,T007,GA,Non-Target
+H102743,"Victor Rossi, MD",Oncology,2,Low Potential,T014,IN,Non-Target
+H102756,"Grace Gupta, MD",Oncology,2,Low Potential,T021,WA,Non-Target
+H102769,"Anna Fischer, NP",Pulmonology,6,Grow,T004,NJ,Target
+H102782,"Sanjay Mehta, MD",Oncology,1,Low Potential,T011,TX,Non-Target
+H102795,"Anna Jensen, MD",Oncology,2,Low Potential,T018,WI,Non-Target
+H102808,"Anna Gupta, MD",Internal Medicine,9,High Value,T001,MA,Target
+H102821,"Brian Kowalski, MD",Internal Medicine,7,Grow,T008,AL,Target
+H102834,"Deepak Abbott, MD",Oncology,7,Grow,T015,OH,Target
+H102847,"Brian Varga, MD",Internal Medicine,6,Grow,T022,OR,Target
+H102860,"Pedro Quinn, MD",Hematology,10,High Value,T005,PA,Target
+H102873,"Elena Mehta, MD",Hematology,5,Grow,T012,TX,Non-Target
+H102886,"Rosa Abbott, MD",Internal Medicine,1,Low Potential,T019,CA,Non-Target
+H102899,"Jamal Mehta, MD",Hematology,2,Low Potential,T002,CT,Non-Target
+H102912,"Irene Gupta, MD",Oncology,6,Grow,T009,FL,Target
+H102925,"Irene Okoye, NP",Pulmonology,2,Low Potential,T016,KY,Non-Target
+H102938,"Wen Park, NP",Internal Medicine,6,Grow,T023,CO,Target
+H102951,"Tara Hoffman, MD",Pulmonology,2,Low Potential,T006,MD,Non-Target
+H102964,"Farid Novak, NP",Internal Medicine,2,Low Potential,T013,IL,Non-Target
+H102977,"Irene Hoffman, NP",Internal Medicine,6,Grow,T020,CA,Target
+H102990,"Tara Bhatt, MD",Pulmonology,8,High Value,T003,NY,Target
+H103003,"Karen Ellis, MD",Hematology,2,Low Potential,T010,FL,Non-Target
+H103016,"Wen Lindqvist, DO",Nurse Practitioner,3,Maintain,T017,MN,Non-Target
+H103029,"Victor Park, MD",Hematology,5,Grow,T024,AZ,Non-Target
+H103042,"Victor Carter, MD",Oncology,5,Grow,T007,GA,Non-Target
+H103055,"Olivia Lindqvist, NP",Internal Medicine,,Grow,T014,IN,Target
+H103068,"Jamal Abbott, MD",Pulmonology,10,High Value,T021,WA,Target
+H103081,"Pedro Ellis, MD",Pulmonology,6,Grow,T004,NJ,Target
+H103094,"Wen Carter, MD",Hematology,1,Low Potential,T011,TX,Non-Target
+H103107,"Hiro Varga, MD",Hematology,5,Grow,T018,WI,Non-Target
+H103120,"Yusuf Lindqvist, MD",Pulmonology,1,Low Potential,T001,MA,Non-Target
+H103133,"Yusuf Turner, MD",Hematology,5,Grow,T008,AL,Non-Target
+H103146,"Wen Mehta, MD",Oncology,4,Maintain,T015,OH,Non-Target
+H103159,"Yusuf Fischer, MD",Hematology,4,Maintain,T022,OR,Non-Target
+H103172,"Chloe Mehta, DO",Oncology,5,Grow,T005,PA,Non-Target
+H103185,"Yusuf Quinn, MD",Oncology,2,Low Potential,T012,TX,Non-Target
+H103198,"Hiro Abbott, NP",Nurse Practitioner,6,Grow,T019,CA,Target
+H103211,"Brian Jensen, DO",Oncology,10,High Value,T002,CT,Target
+H103224,"Jamal Underwood, MD",Pulmonology,4,Maintain,T009,FL,Non-Target
+H103237,"Yusuf Ellis, MD",Hematology,4,Maintain,T016,KY,Non-Target
+H103250,"Sanjay Carter, MD",Oncology,4,Maintain,T023,CO,Non-Target
+H103263,"Luis Kowalski, MD",Pulmonology,4,Maintain,T006,MD,Non-Target
+H103276,"Pedro Okoye, MD",Internal Medicine,7,Grow,T013,IL,Target
+H103289,"Karen Mehta, NP",Internal Medicine,9,High Value,T020,CA,Target
+H103302,"Karen Novak, MD",Nurse Practitioner,3,Maintain,T003,NY,Non-Target
+H103315,"Karen Kowalski, MD",Hematology,1,Low Potential,T010,FL,Non-Target
+H103328,"Pedro Abbott, MD",Nurse Practitioner,1,Low Potential,T017,MN,Non-Target
+H103341,"Elena Iyer, MD",Hematology,5,Grow,T024,AZ,Non-Target
+H103354,"Olivia Park, MD",Nurse Practitioner,5,Grow,T007,GA,Non-Target
+H103367,"Chloe Abbott, MD",Oncology,2,Low Potential,T014,IN,Non-Target
+H103380,"Elena Varga, MD",Internal Medicine,4,Maintain,T021,WA,Non-Target
+H103393,"Grace Quinn, MD",Internal Medicine,6,Grow,T004,NJ,Target
+H103406,"Pedro Lindqvist, DO",Internal Medicine,4,Maintain,T011,TX,Non-Target
+H103419,"Anna Carter, NP",Hematology,4,Maintain,T018,WI,Non-Target
+H103432,"Anna Bhatt, NP",Hematology,7,Grow,T001,MA,Target
+H103445,"Wen Jensen, MD",Internal Medicine,4,Maintain,T008,AL,Non-Target
+H103458,"Yusuf Okoye, MD",Hematology,1,Low Potential,T015,OH,Non-Target
+H103471,"Deepak Rossi, MD",Internal Medicine,2,Low Potential,T022,OR,Non-Target
+H103484,"Grace Jensen, MD",Oncology,4,Maintain,T005,PA,Non-Target
+H103497,"Maya Novak, MD",Nurse Practitioner,4,Maintain,T012,TX,Non-Target
+H103510,"Nikhil Varga, DO",Pulmonology,5,Grow,T019,CA,Non-Target
+H103523,"Maya Kowalski, MD",Pulmonology,2,Low Potential,T002,CT,Non-Target
+H103536,"Luis Ellis, MD",Pulmonology,4,Maintain,T009,FL,Non-Target
+H103549,"Nikhil Ellis, DO",Oncology,6,Grow,T016,KY,Target
+H103562,"Jamal Dominguez, MD",Internal Medicine,1,Low Potential,T023,CO,Non-Target
+H103575,"Farid Okoye, MD",Oncology,3,Maintain,T006,MD,Non-Target
+H103588,"Nikhil Okoye, MD",Internal Medicine,6,Grow,T013,IL,Target
+H103601,"Nikhil Jensen, MD",Hematology,7,Grow,T020,CA,Target
+H103614,"Nikhil Bhatt, MD",Internal Medicine,3,Maintain,T003,NY,Non-Target
+H103627,"Elena Underwood, MD",Pulmonology,1,Low Potential,T010,FL,Non-Target
+H103640,"Brian Ellis, MD",Hematology,1,Low Potential,T017,MN,Non-Target
+H103653,"Olivia Fischer, MD",Pulmonology,6,Grow,T024,AZ,Target
+H103666,"Sanjay Turner, MD",Internal Medicine,,Low Potential,T007,GA,Non-Target
+H103679,"Rosa Hoffman, MD",Internal Medicine,2,Low Potential,T014,IN,Non-Target
+H103692,"Luis Fischer, MD",Internal Medicine,6,Grow,T021,WA,Target
+H103705,"Brian Hoffman, MD",Internal Medicine,5,Grow,T004,NJ,Non-Target
+H103718,"Jamal Ellis, MD",Hematology,5,Grow,T011,TX,Non-Target
+H103731,"Tara Gupta, MD",Pulmonology,1,Low Potential,T018,WI,Non-Target
+H103744,"Rosa Rossi, MD",Hematology,1,Low Potential,T001,MA,Non-Target
+H103757,"Deepak Ellis, MD",Internal Medicine,10,High Value,T008,AL,Target
+H103770,"Deepak Okoye, MD",Internal Medicine,1,Low Potential,T015,OH,Non-Target
+H103783,"Victor Quinn, DO",Oncology,4,Maintain,T022,OR,Non-Target
+H103796,"Farid Iyer, MD",Oncology,7,Grow,T005,PA,Target
+H103809,"Luis Rossi, MD",Nurse Practitioner,4,Maintain,T012,TX,Non-Target
+H103822,"Sanjay Bhatt, MD",Hematology,9,High Value,T019,CA,Target
+H103835,"Chloe Ellis, MD",Hematology,8,High Value,T002,CT,Target
+H103848,"Irene Abbott, MD",Oncology,9,High Value,T009,FL,Target
+H103861,"Anna Park, MD",Hematology,4,Maintain,T016,KY,Non-Target
+H103874,"Sanjay Kowalski, MD",Oncology,5,Grow,T023,CO,Non-Target
+H103887,"Irene Ellis, DO",Nurse Practitioner,2,Low Potential,T006,MD,Non-Target
+H103900,"Olivia Kowalski, MD",Pulmonology,4,Maintain,T013,IL,Non-Target
+H103913,"Nikhil Kowalski, NP",Oncology,1,Low Potential,T020,CA,Non-Target
+H103926,"Elena Lindqvist, MD",Internal Medicine,6,Grow,T003,NY,Target
+H103939,"Deepak Novak, DO",Pulmonology,10,High Value,T010,FL,Target
+H103952,"Hiro Iyer, MD",Oncology,2,Low Potential,T017,MN,Non-Target
+H103965,"Tara Novak, MD",Oncology,2,Low Potential,T024,AZ,Non-Target
+H103978,"Maya Jensen, MD",Internal Medicine,9,High Value,T007,GA,Target
+H103991,"Grace Rossi, MD",Hematology,3,Maintain,T014,IN,Non-Target
+H104004,"Hiro Novak, MD",Pulmonology,2,Low Potential,T021,WA,Non-Target
+H104017,"Karen Iyer, MD",Oncology,1,Low Potential,T004,NJ,Non-Target
+H104030,"Brian Dominguez, MD",Pulmonology,5,Grow,T011,TX,Non-Target
+H104043,"Elena Kowalski, MD",Pulmonology,4,Maintain,T018,WI,Non-Target
+H104056,"Maya Turner, MD",Nurse Practitioner,2,Low Potential,T001,MA,Non-Target
+H104069,"Chloe Rossi, MD",Nurse Practitioner,10,High Value,T008,AL,Target
+H104082,"Hiro Sato, MD",Pulmonology,3,Maintain,T015,OH,Non-Target
+H104095,"Sanjay Abbott, MD",Hematology,5,Grow,T022,OR,Non-Target
+H104108,"Rosa Varga, MD",Hematology,1,Low Potential,T005,PA,Non-Target
+H104121,"Elena Carter, DO",Hematology,10,High Value,T012,TX,Target
+H104134,"Sanjay Hoffman, MD",Internal Medicine,7,Grow,T019,CA,Target
+H104147,"Anna Mehta, MD",Hematology,6,Grow,T002,CT,Target
+H104160,"Brian Okoye, NP",Nurse Practitioner,1,Low Potential,T009,FL,Non-Target
+H104173,"Tara Varga, NP",Oncology,3,Maintain,T016,KY,Non-Target
+H104186,"Farid Gupta, NP",Oncology,1,Low Potential,T023,CO,Non-Target
+H104199,"Chloe Quinn, MD",Internal Medicine,5,Grow,T006,MD,Non-Target
+H104212,"Farid Dominguez, MD",Hematology,1,Low Potential,T013,IL,Non-Target
+H104225,"Anna Varga, MD",Nurse Practitioner,2,Low Potential,T020,CA,Non-Target
+H104238,"Anna Kowalski, MD",Oncology,4,Maintain,T003,NY,Non-Target
+H104251,"Anna Iyer, MD",Internal Medicine,7,Grow,T010,FL,Target
+H104264,"Karen Dominguez, MD",Oncology,6,Grow,T017,MN,Target
+H104277,"Brian Underwood, MD",Hematology,,High Value,T024,AZ,Target
+H104290,"Olivia Okoye, MD",Nurse Practitioner,5,Grow,T007,GA,Non-Target
+H104303,"Jamal Quinn, NP",Nurse Practitioner,6,Grow,T014,IN,Target
+H104316,"Nikhil Fischer, MD",Nurse Practitioner,1,Low Potential,T021,WA,Non-Target
+H104329,"Maya Hoffman, MD",Pulmonology,2,Low Potential,T004,NJ,Non-Target
+H104342,"Luis Mehta, MD",Internal Medicine,7,Grow,T011,TX,Target
+H104355,"Rosa Lindqvist, MD",Internal Medicine,7,Grow,T018,WI,Target
+H104368,"Nikhil Park, MD",Hematology,6,Grow,T001,MA,Target
+H104381,"Yusuf Dominguez, MD",Oncology,3,Maintain,T008,AL,Non-Target
+H104394,"Deepak Hoffman, DO",Internal Medicine,1,Low Potential,T015,OH,Non-Target
+H104407,"Grace Park, MD",Oncology,9,High Value,T022,OR,Target
+H104420,"Pedro Gupta, MD",Internal Medicine,6,Grow,T005,PA,Target
+H104433,"Yusuf Kowalski, DO",Internal Medicine,1,Low Potential,T012,TX,Non-Target
+H104446,"Hiro Jensen, DO",Hematology,10,High Value,T019,CA,Target
+H104459,"Olivia Ellis, MD",Oncology,9,High Value,T002,CT,Target
+H104472,"Deepak Dominguez, DO",Hematology,5,Grow,T009,FL,Non-Target
+H104485,"Victor Lindqvist, MD",Internal Medicine,6,Grow,T016,KY,Target
+H104498,"Yusuf Mehta, MD",Pulmonology,2,Low Potential,T023,CO,Non-Target
+H104511,"Elena Quinn, MD",Pulmonology,3,Maintain,T006,MD,Non-Target
+H104524,"Irene Sato, MD",Pulmonology,4,Maintain,T013,IL,Non-Target
+H104537,"Elena Ellis, MD",Hematology,1,Low Potential,T020,CA,Non-Target
+H104550,"Luis Park, MD",Nurse Practitioner,1,Low Potential,T003,NY,Non-Target
+H104563,"Nikhil Mehta, MD",Internal Medicine,7,Grow,T010,FL,Target
+H104576,"Pedro Carter, NP",Pulmonology,6,Grow,T017,MN,Target
+H104589,"Deepak Mehta, MD",Oncology,9,High Value,T024,AZ,Target
+H104602,"Rosa Bhatt, MD",Hematology,10,High Value,T007,GA,Target
+H104615,"Maya Ellis, MD",Oncology,4,Maintain,T014,IN,Non-Target
+H104628,"Anna Underwood, MD",Hematology,2,Low Potential,T021,WA,Non-Target
+H104641,"Deepak Underwood, DO",Hematology,4,Maintain,T004,NJ,Non-Target
+H104654,"Olivia Sato, MD",Pulmonology,2,Low Potential,T011,TX,Non-Target
+H104667,"Chloe Sato, MD",Internal Medicine,1,Low Potential,T018,WI,Non-Target
+H104680,"Wen Novak, MD",Pulmonology,3,Maintain,T001,MA,Non-Target
+H104693,"Sanjay Park, MD",Internal Medicine,5,Grow,T008,AL,Non-Target
+H104706,"Chloe Dominguez, MD",Oncology,7,Grow,T015,OH,Target
+H104719,"Sanjay Gupta, MD",Nurse Practitioner,1,Low Potential,T022,OR,Non-Target
+H104732,"Victor Bhatt, MD",Hematology,8,High Value,T005,PA,Target
+H104745,"Tara Iyer, MD",Hematology,4,Maintain,T012,TX,Non-Target
+H104758,"Jamal Bhatt, NP",Internal Medicine,5,Grow,T019,CA,Non-Target
+H104771,"Farid Fischer, MD",Pulmonology,7,Grow,T002,CT,Target
+H104784,"Irene Bhatt, MD",Nurse Practitioner,9,High Value,T009,FL,Target
+H104797,"Rosa Gupta, NP",Pulmonology,4,Maintain,T016,KY,Non-Target
+H104810,"Wen Varga, NP",Hematology,8,High Value,T023,CO,Target
+H104823,"Pedro Fischer, DO",Internal Medicine,5,Grow,T006,MD,Non-Target
+H104836,"Maya Underwood, MD",Oncology,4,Maintain,T013,IL,Non-Target
+H104849,"Grace Okoye, NP",Oncology,3,Maintain,T020,CA,Non-Target
+H104862,"Hiro Dominguez, MD",Internal Medicine,4,Maintain,T003,NY,Non-Target
+H104875,"Yusuf Iyer, MD",Pulmonology,5,Grow,T010,FL,Non-Target
+H104888,"Karen Fischer, MD",Internal Medicine,,Maintain,T017,MN,Non-Target
+H104901,"Nikhil Lindqvist, MD",Oncology,7,Grow,T024,AZ,Target
+H104914,"Karen Okoye, MD",Oncology,3,Maintain,T007,GA,Non-Target
+H104927,"Hiro Ellis, MD",Oncology,4,Maintain,T014,IN,Non-Target
+H104940,"Tara Okoye, MD",Oncology,3,Maintain,T021,WA,Non-Target
+H104953,"Jamal Turner, MD",Internal Medicine,3,Maintain,T004,NJ,Non-Target
+H104966,"Rosa Fischer, MD",Oncology,3,Maintain,T011,TX,Non-Target
+H104979,"Chloe Kowalski, MD",Oncology,3,Maintain,T018,WI,Non-Target
+H104992,"Victor Sato, NP",Internal Medicine,5,Grow,T001,MA,Non-Target
+H105005,"Victor Kowalski, MD",Hematology,3,Maintain,T008,AL,Non-Target
+H105018,"Olivia Gupta, MD",Hematology,6,Grow,T015,OH,Target
+H105031,"Rosa Mehta, MD",Nurse Practitioner,4,Maintain,T022,OR,Non-Target
+H105044,"Wen Kowalski, MD",Oncology,5,Grow,T005,PA,Non-Target
+H105057,"Pedro Iyer, MD",Oncology,2,Low Potential,T012,TX,Non-Target
+H105070,"Chloe Turner, MD",Oncology,5,Grow,T019,CA,Non-Target
+H105083,"Irene Park, NP",Internal Medicine,1,Low Potential,T002,CT,Non-Target
+H105096,"Pedro Sato, MD",Pulmonology,4,Maintain,T009,FL,Non-Target
+H105109,"Jamal Jensen, MD",Hematology,9,High Value,T016,KY,Target
+H105122,"Farid Turner, DO",Oncology,1,Low Potential,T023,CO,Non-Target
+H105135,"Maya Carter, NP",Pulmonology,1,Low Potential,T006,MD,Non-Target
+H105148,"Luis Gupta, DO",Internal Medicine,5,Grow,T013,IL,Non-Target
+H105161,"Maya Fischer, MD",Oncology,3,Maintain,T020,CA,Non-Target
+H105174,"Farid Abbott, MD",Internal Medicine,2,Low Potential,T003,NY,Non-Target
+H105187,"Anna Okoye, DO",Oncology,1,Low Potential,T010,FL,Non-Target
+H105200,"Pedro Hoffman, MD",Oncology,4,Maintain,T017,MN,Non-Target
+H105213,"Chloe Okoye, MD",Pulmonology,4,Maintain,T024,AZ,Non-Target
+H105226,"Deepak Jensen, MD",Oncology,2,Low Potential,T007,GA,Non-Target
+H105239,"Jamal Rossi, DO",Internal Medicine,1,Low Potential,T014,IN,Non-Target
+H105252,"Wen Fischer, MD",Oncology,8,High Value,T021,WA,Target
+H105265,"Wen Abbott, DO",Nurse Practitioner,3,Maintain,T004,NJ,Non-Target
+H105278,"Olivia Turner, MD",Hematology,5,Grow,T011,TX,Non-Target
+H105291,"Olivia Jensen, MD",Oncology,4,Maintain,T018,WI,Non-Target
+H105304,"Nikhil Underwood, MD",Oncology,6,Grow,T001,MA,Target
+H105317,"Yusuf Bhatt, NP",Oncology,1,Low Potential,T008,AL,Non-Target
+H105330,"Victor Gupta, MD",Oncology,2,Low Potential,T015,OH,Non-Target
+H105343,"Elena Gupta, NP",Nurse Practitioner,1,Low Potential,T022,OR,Non-Target
+H105356,"Pedro Turner, NP",Oncology,3,Maintain,T005,PA,Non-Target
+H105369,"Deepak Lindqvist, MD",Hematology,3,Maintain,T012,TX,Non-Target
+H105382,"Karen Quinn, DO",Oncology,7,Grow,T019,CA,Target
+H105395,"Tara Fischer, MD",Oncology,6,Grow,T002,CT,Target
+H105408,"Irene Lindqvist, MD",Internal Medicine,5,Grow,T009,FL,Non-Target
+H105421,"Luis Dominguez, MD",Internal Medicine,2,Low Potential,T016,KY,Non-Target
+H105434,"Chloe Varga, MD",Pulmonology,6,Grow,T023,CO,Target
+H105447,"Elena Okoye, MD",Oncology,8,High Value,T006,MD,Target
+H105460,"Pedro Rossi, MD",Nurse Practitioner,1,Low Potential,T013,IL,Non-Target

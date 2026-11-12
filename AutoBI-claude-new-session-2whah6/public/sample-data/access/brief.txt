@@ -1,0 +1,33 @@
+Project: Spacysla FRM Patient Funnel
+Client / BU: Sanofi – Rare Blood Disorders, Patient Support Services
+Audience: Field Reimbursement Managers (FRMs) and access leadership
+Frequency: Weekly
+
+Paste this requirement into "Describe the dashboard":
+
+Create a patient access dashboard for Spacysla, our newly launched rare disease therapy, for the Field Reimbursement Manager (FRM) team.
+The dashboard should:
+- Track patients from prescription through therapy initiation.
+- Identify patients experiencing delays or drop-offs.
+- Highlight prior authorization and reimbursement barriers.
+- Analyze issues by payer, plan, and PBM.
+- Identify HCPs associated with access challenges.
+- Allow FRMs to filter by territory, HCP, and payer.
+
+Files to attach in the Data step:
+- sp_patient_journey.csv   specialty pharmacy patient journey: referral → benefits verification → PA → decision / appeal → therapy start
+- payer_plan_pbm.csv       payer, plan, channel, PBM and formulary status
+- hcp_frm_alignment.xlsx   sheet "HCPs" (HCP, specialty, institution, territory) and sheet "FRM Territories" (territory, region, FRM)
+
+Live change request for the demo (Step 4):
+1. Requirements chat:  "FRMs also need to see HCPs where more than five patients are currently experiencing prior authorization delays."
+2. Reporting Foundation → Describe a KPI:  "Patients with PA pending for more than 14 days"
+3. Design assistant:  "Show HCPs with more than 5 patients with PA pending for more than 14 days"
+
+Planned test failure (Step 5), shows on every run:
+  "Patient Activity ↔ Plan Master: 3 records reference a Plan_ID not present in Plan Master".
+  Fix: in the Data step upload corrections/payer_plan_pbm.csv (same file name → replaces the payer file,
+  approvals are kept), then Testing → Run automated tests → the test passes.
+Also possible: if a "Total Patients" KPI counts rows instead of unique patients, the
+  "counts each patient once" test fails (re-referred patients appear twice). Fix: KPI Definitions →
+  edit the KPI → COUNT DISTINCT → re-run.

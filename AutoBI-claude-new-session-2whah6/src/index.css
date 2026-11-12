@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+html, body, #root { height: 100%; }
+body { @apply bg-slate-50 text-slate-800 antialiased; font-feature-settings: 'cv11', 'ss01'; }
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+
+/* The interface is designed at 90% scale: every size is in rem, so this one value scales the whole UI
+   (the same effect as browser zoom at 90%, and it still follows the user's own zoom and font settings). */
+html { font-size: 90%; }
+
+@layer components {
+  .card { @apply bg-white border border-slate-200 rounded-xl shadow-card; }
+  .input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100; }
+  .label { @apply block text-xs font-medium text-slate-600 mb-1; }
+  .th { @apply px-3 py-2 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200 whitespace-nowrap; }
+  .td { @apply px-3 py-2 text-sm text-slate-700 border-b border-slate-100 align-top; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium; }
+  .section-title { @apply text-sm font-semibold text-slate-900; }
+  .muted { @apply text-xs text-slate-500; }
+}
+
+.md h1 { @apply text-2xl font-semibold text-navy-900 mb-3; }
+.md h2 { @apply text-lg font-semibold text-navy-900 mt-6 mb-2 pb-1 border-b border-slate-200; }
+.md h3 { @apply text-base font-semibold text-slate-800 mt-4 mb-2; }
+.md p { @apply text-sm text-slate-700 my-2 leading-relaxed; }
+.md ul { @apply list-disc pl-5 text-sm text-slate-700 my-2 space-y-0.5; }
+.md ol { @apply list-decimal pl-5 text-sm text-slate-700 my-2 space-y-0.5; }
+.md { @apply min-w-0 max-w-full; overflow-wrap: break-word; }
+.md .md-table { @apply my-3 max-w-full overflow-x-auto; }
+.md table { @apply w-full text-xs border border-slate-200 border-collapse; table-layout: auto; }
+.md th { @apply bg-slate-50 text-left px-2 py-1.5 font-semibold text-slate-600 border border-slate-200; white-space: nowrap; }
+.md td { @apply px-2 py-1.5 border border-slate-200 align-top text-slate-700; overflow-wrap: break-word; min-width: 4.5rem; }
+.md blockquote { @apply border-l-4 border-brand-200 bg-brand-50/50 pl-3 py-1 my-3 text-sm text-slate-600; }
+.md code { @apply bg-slate-100 rounded px-1 text-[0.75rem]; }
+
+@keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+@media print {
+  .no-print { display: none !important; }
+}

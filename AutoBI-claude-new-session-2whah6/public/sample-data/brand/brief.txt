@@ -1,0 +1,14 @@
+Project: Zentrava Brand Performance
+Client / BU: Oncology Brand Team
+Audience: Commercial leadership and district managers
+Frequency: Weekly
+
+Paste this requirement into "Describe the dashboard":
+
+Build a brand performance dashboard for Zentrava for the commercial leadership team and district managers. Track TRx and NRx weekly by product, compare with the previous period, and show prescriptions by region, by specialty and by HCP decile. Monitor field calls and call completion rate by channel and by segment, and identify the top prescribing HCPs. Filter by region, district, product, specialty and reporting period.
+
+Files to attach in the Data step:
+- hcp_universe.csv        HCP universe (specialty, decile, segment, territory, target flag)
+- territory_alignment.xlsx territory > district > region alignment with rep roster
+- rx_weekly.csv           weekly TRx / NRx by HCP and product (Zentrava vs competitors)
+- field_calls.json        field calls (channel, status, samples, key message)

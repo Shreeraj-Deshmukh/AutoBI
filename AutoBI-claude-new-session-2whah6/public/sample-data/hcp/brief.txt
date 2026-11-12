@@ -1,0 +1,4 @@
+Project: HCP Engagement & Performance Analytics
+Paste this requirement into "Describe the dashboard":
+
+Build a dashboard to monitor HCP engagement across regions. I want to understand calls made by different account segments, compare activity by account tier, track email campaign performance, and identify changes in engagement over time. The dashboard should allow filtering by region, territory, call type, and reporting period.

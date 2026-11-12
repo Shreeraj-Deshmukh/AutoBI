@@ -1,0 +1,4 @@
+Project: Retail Sales Performance
+Paste this requirement into "Describe the dashboard":
+
+Build a retail performance dashboard. Track net sales revenue and number of transactions over time, monthly, and compare with the previous period. Show sales by region, by product category and by channel, and identify top stores and top products. Track refund rate. Filter by region, category, channel and reporting period.

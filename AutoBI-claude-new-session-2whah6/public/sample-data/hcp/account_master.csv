@@ -1,0 +1,241 @@
+Account_ID,Account_Name,Specialty,Region,Territory,State,Account_Tier
+A1001,Dr. Julia Moreau,Neurology,Southeast,SE-Charlotte,VA,Tier 3
+A1002,Dr. Elena Okafor,Cardiology,West,W-Seattle,OR,Tier 3
+A1003,Dr. Michael Schmidt,Primary Care,Northeast,NE-New York,NJ,Tier 3
+A1004,Dr. Ahmed Moreau,Cardiology,Midwest,MW-Chicago,WI,Tier 1
+A1005,Dr. Victor Fischer,Neurology,West,W-Denver,UT,Tier 1
+A1006,Dr. Rachel Walker,Neurology,Northeast,NE-Philadelphia,DE,Tier 2
+A1007,Dr. Julia Garcia,Cardiology,Midwest,MW-Detroit,OH,Tier 3
+A1008,Dr. James Kim,Rheumatology,Southwest,SW-Dallas,TX,Tier 2
+A1009,Dr. Nina Dubois,Oncology,Southeast,SE-Atlanta,SC,Tier 2
+A1010,Dr. Mei Nguyen,Neurology,Midwest,MW-Minneapolis,IA,Tier 3
+A1011,Dr. Samuel Moreau,Cardiology,Southwest,SW-Phoenix,NM,Tier 3
+A1012,Dr. Priya Miller,Rheumatology,Southeast,SE-Miami,FL,Tier 1
+A1013,Dr. Hannah Johnson,Cardiology,West,W-Los Angeles,CA,Tier 1
+A1014,Dr. Robert Garcia,Neurology,Northeast,NE-Boston,MA,Tier 2
+A1015,Dr. Laura Kim,Primary Care,Southeast,SE-Charlotte,VA,Tier 1
+A1016,Dr. Kevin Mendes,Primary Care,West,W-Seattle,WA,Tier 3
+A1017,Dr. Hannah Haddad,Endocrinology,Northeast,NE-New York,NJ,Tier 1
+A1018,Dr. Kevin Haddad,Neurology,Midwest,MW-Chicago,WI,Tier 3
+A1019,Dr. Ahmed Chen,Primary Care,West,W-Denver,UT,Tier 1
+A1020,Dr. Rachel Nguyen,Rheumatology,Northeast,NE-Philadelphia,DE,Tier 1
+A1021,Dr. Daniel Hernandez,Cardiology,Midwest,MW-Detroit,MI,Tier 2
+A1022,Dr. Daniel Schmidt,Cardiology,Southwest,SW-Dallas,TX,Tier 3
+A1023,Dr. Priya Ibrahim,Primary Care,Southeast,SE-Atlanta,SC,Tier 3
+A1024,Dr. Ahmed Schmidt,Primary Care,Midwest,MW-Minneapolis,IA,Tier 2
+A1025,Dr. Hannah Fischer,Neurology,Southwest,SW-Phoenix,AZ,Tier 1
+A1026,Dr. Aisha Sato,Oncology,Southeast,SE-Miami,FL,Tier 3
+A1027,Dr. Kevin Sato,Oncology,West,W-Los Angeles,CA,Tier 3
+A1028,Dr. James Okafor,Cardiology,Northeast,NE-Boston,NH,Tier 3
+A1029,Dr. Sarah Mendes,Rheumatology,Southeast,SE-Charlotte,NC,Tier 3
+A1030,Dr. Victor Kim,Rheumatology,West,W-Seattle,OR,Tier 3
+A1031,Dr. Robert Kim,Primary Care,Northeast,NE-New York,NY,Tier 3
+A1032,Dr. Laura Ibrahim,Neurology,Midwest,MW-Chicago,WI,Tier 3
+A1033,Dr. Elena Kowalski,Cardiology,West,W-Denver,CO,Tier 1
+A1034,Dr. Hannah Garcia,Oncology,Northeast,NE-Philadelphia,PA,Tier 2
+A1035,Dr. Omar Moreau,Primary Care,Midwest,MW-Detroit,OH,Tier 1
+A1036,Dr. Grace Garcia,Oncology,Southwest,SW-Dallas,OK,Tier 2
+A1037,Dr. Julia Kim,Neurology,Southeast,SE-Atlanta,SC,Tier 3
+A1038,Dr. Thomas Mendes,Rheumatology,Midwest,MW-Minneapolis,MN,Tier 3
+A1039,Dr. Sofia Schmidt,Neurology,Southwest,SW-Phoenix,NM,Tier 2
+A1040,Dr. Thomas Ibrahim,Neurology,Southeast,SE-Miami,FL,Tier 3
+A1041,Dr. Samuel Chen,,West,W-Los Angeles,CA,Tier 3
+A1042,Dr. Julia Ibrahim,Cardiology,Northeast,NE-Boston,NH,Tier 1
+A1043,Dr. Rachel Fischer,Rheumatology,Southeast,SE-Charlotte,NC,Tier 3
+A1044,Dr. James Hernandez,Primary Care,West,W-Seattle,WA,Tier 2
+A1045,Dr. Kevin Garcia,Primary Care,Northeast,NE-New York,NJ,Tier 1
+A1046,Dr. Aisha Dubois,Neurology,Midwest,MW-Chicago,IL,Tier 3
+A1047,Dr. David Schmidt,Rheumatology,West,W-Denver,CO,Tier 1
+A1048,Dr. Mei Brennan,Neurology,Northeast,NE-Philadelphia,PA,Tier 1
+A1049,Dr. Hannah Kim,Oncology,Midwest,MW-Detroit,OH,Tier 2
+A1050,Dr. Samuel Brennan,Oncology,Southwest,SW-Dallas,TX,Tier 2
+A1051,Dr. Mei Ibrahim,Rheumatology,Southeast,SE-Atlanta,SC,Tier 3
+A1052,Dr. Ahmed Johnson,Cardiology,Midwest,MW-Minneapolis,MN,Tier 1
+A1053,Dr. Samuel Larsen,Rheumatology,Southwest,SW-Phoenix,AZ,Tier 1
+A1054,Dr. Samuel Dubois,Endocrinology,Southeast,SE-Miami,FL,Tier 2
+A1055,Dr. Victor Walker,Cardiology,West,W-Los Angeles,CA,Tier 1
+A1056,Dr. Thomas Rossi,Primary Care,Northeast,NE-Boston,ME,Tier 2
+A1057,Dr. Hannah Walker,Rheumatology,Southeast,SE-Charlotte,NC,Tier 2
+A1058,Dr. Victor Ibrahim,Oncology,West,W-Seattle,WA,Tier 2
+A1059,Dr. James Rossi,Primary Care,Northeast,NE-New York,NJ,Tier 3
+A1060,Dr. Elena Rossi,Endocrinology,Midwest,MW-Chicago,WI,Tier 2
+A1061,Dr. Elena Moreau,Cardiology,West,W-Denver,UT,Tier 1
+A1062,Dr. Grace Dubois,Neurology,Northeast,NE-Philadelphia,PA,Tier 3
+A1063,Dr. Omar Okafor,Primary Care,Midwest,MW-Detroit,MI,Tier 2
+A1064,Dr. James Larsen,Endocrinology,Southwest,SW-Dallas,OK,Tier 2
+A1065,Dr. Robert Moreau,Oncology,Southeast,SE-Atlanta,GA,Tier 2
+A1066,Dr. Hannah Kowalski,Rheumatology,Midwest,MW-Minneapolis,MN,Tier 3
+A1067,Dr. Priya Moreau,Neurology,Southwest,SW-Phoenix,NM,Tier 1
+A1068,Dr. Michael Larsen,Endocrinology,Southeast,SE-Miami,FL,Tier 2
+A1069,Dr. Nina Miller,Rheumatology,West,W-Los Angeles,CA,Tier 3
+A1070,Dr. Sarah Patel,Oncology,Northeast,NE-Boston,NH,Tier 2
+A1071,Dr. Daniel Fischer,Neurology,Southeast,SE-Charlotte,VA,Tier 1
+A1072,Dr. Sarah Nguyen,Oncology,West,W-Seattle,WA,Tier 1
+A1073,Dr. Elena Mendes,Neurology,Northeast,NE-New York,NJ,Tier 2
+A1074,Dr. Sofia Nguyen,Cardiology,Midwest,MW-Chicago,IL,Tier 3
+A1075,Dr. David Brennan,Primary Care,West,W-Denver,CO,Tier 3
+A1076,Dr. Grace Moreau,Cardiology,Northeast,NE-Philadelphia,PA,Tier 3
+A1077,Dr. Kevin Dubois,Primary Care,Midwest,MW-Detroit,OH,Tier 1
+A1078,Dr. Mei Miller,Neurology,Southwest,SW-Dallas,OK,Tier 2
+A1079,Dr. Michael Garcia,Rheumatology,Southeast,SE-Atlanta,GA,Tier 2
+A1080,Dr. Julia Fischer,Primary Care,Midwest,MW-Minneapolis,IA,Tier 2
+A1081,Dr. James Kowalski,Primary Care,Southwest,SW-Phoenix,AZ,Tier 1
+A1082,Dr. Michael Brennan,,Southeast,SE-Miami,FL,Tier 3
+A1083,Dr. Rachel Brennan,Neurology,West,W-Los Angeles,CA,Tier 2
+A1084,Dr. Omar Haddad,Neurology,Northeast,NE-Boston,NH,Tier 1
+A1085,Dr. Grace Fischer,Cardiology,Southeast,SE-Charlotte,VA,Tier 3
+A1086,Dr. Daniel Mendes,Rheumatology,West,W-Seattle,WA,Tier 2
+A1087,Dr. Sarah Fischer,Oncology,Northeast,NE-New York,NY,Tier 2
+A1088,Dr. Sarah Walker,Endocrinology,Midwest,MW-Chicago,IL,Tier 1
+A1089,Dr. Aisha Fischer,Cardiology,West,W-Denver,UT,Tier 2
+A1090,Dr. Carlos Haddad,Neurology,Northeast,NE-Philadelphia,DE,Tier 3
+A1091,Dr. Sofia Kowalski,Oncology,Midwest,MW-Detroit,MI,Tier 3
+A1092,Dr. Omar Sato,Neurology,Southwest,SW-Dallas,TX,Tier 2
+A1093,Dr. Nina Moreau,Neurology,Southeast,SE-Atlanta,SC,Tier 1
+A1094,Dr. Ahmed Ibrahim,Oncology,Midwest,MW-Minneapolis,IA,Tier 1
+A1095,Dr. Victor Nguyen,Neurology,Southwest,SW-Phoenix,AZ,Tier 2
+A1096,Dr. Julia Dubois,Endocrinology,Southeast,SE-Miami,FL,Tier 1
+A1097,Dr. Kevin Rossi,Rheumatology,West,W-Los Angeles,CA,Tier 2
+A1098,Dr. Priya Kowalski,Cardiology,Northeast,NE-Boston,ME,Tier 3
+A1099,Dr. David Patel,Primary Care,Southeast,SE-Charlotte,NC,Tier 1
+A1100,Dr. Kevin Fischer,Neurology,West,W-Seattle,OR,Tier 2
+A1101,Dr. Mei Chen,Endocrinology,Northeast,NE-New York,NY,Tier 2
+A1102,Dr. James Walker,Oncology,Midwest,MW-Chicago,IL,Tier 1
+A1103,Dr. Priya Haddad,Neurology,West,W-Denver,CO,Tier 1
+A1104,Dr. James Mendes,Endocrinology,Northeast,NE-Philadelphia,DE,Tier 3
+A1105,Dr. Michael Chen,Oncology,Midwest,MW-Detroit,MI,Tier 2
+A1106,Dr. Michael Kim,Neurology,Southwest,SW-Dallas,TX,Tier 3
+A1107,Dr. Julia Larsen,Neurology,Southeast,SE-Atlanta,GA,Tier 3
+A1108,Dr. Sarah Schmidt,Cardiology,Midwest,MW-Minneapolis,MN,Tier 3
+A1109,Dr. Carlos Patel,Primary Care,Southwest,SW-Phoenix,AZ,Tier 1
+A1110,Dr. Robert Hernandez,Cardiology,Southeast,SE-Miami,FL,Tier 3
+A1111,Dr. Sarah Johnson,Rheumatology,West,W-Los Angeles,CA,Tier 2
+A1112,Dr. Kevin Walker,Primary Care,Northeast,NE-Boston,NH,Tier 2
+A1113,Dr. Daniel Kim,Endocrinology,Southeast,SE-Charlotte,NC,Tier 1
+A1114,Dr. Julia Hernandez,Oncology,West,W-Seattle,OR,Tier 2
+A1115,Dr. Thomas Miller,Rheumatology,Northeast,NE-New York,NJ,Tier 3
+A1116,Dr. Carlos Brennan,Cardiology,Midwest,MW-Chicago,WI,Tier 2
+A1117,Dr. Thomas Kowalski,Cardiology,West,W-Denver,CO,Tier 3
+A1118,Dr. Julia Rossi,Primary Care,Northeast,NE-Philadelphia,DE,Tier 2
+A1119,Dr. Elena Ibrahim,Endocrinology,Midwest,MW-Detroit,OH,Tier 1
+A1120,Dr. Samuel Nguyen,Rheumatology,Southwest,SW-Dallas,OK,Tier 2
+A1121,Dr. Victor Moreau,Neurology,Southeast,SE-Atlanta,SC,Tier 2
+A1122,Dr. Daniel Johnson,Endocrinology,Midwest,MW-Minneapolis,IA,Tier 1
+A1123,Dr. James Brennan,,Southwest,SW-Phoenix,AZ,Tier 1
+A1124,Dr. Nina Larsen,Endocrinology,Southeast,SE-Miami,FL,Tier 3
+A1125,Dr. James Chen,Oncology,West,W-Los Angeles,CA,Tier 2
+A1126,Dr. Robert Okafor,Rheumatology,Northeast,NE-Boston,MA,Tier 3
+A1127,Dr. Robert Johnson,Rheumatology,Southeast,SE-Charlotte,NC,Tier 1
+A1128,Dr. Priya Mendes,Oncology,West,W-Seattle,OR,Tier 3
+A1129,Dr. Sofia Fischer,Neurology,Northeast,NE-New York,NY,Tier 3
+A1130,Dr. Kevin Chen,Cardiology,Midwest,MW-Chicago,WI,Tier 3
+A1131,Dr. Ahmed Dubois,Oncology,West,W-Denver,CO,Tier 1
+A1132,Dr. Priya Okafor,Primary Care,Northeast,NE-Philadelphia,DE,Tier 3
+A1133,Dr. Hannah Nguyen,Cardiology,Midwest,MW-Detroit,OH,Tier 2
+A1134,Dr. Robert Chen,Cardiology,Southwest,SW-Dallas,TX,Tier 3
+A1135,Dr. Elena Miller,Rheumatology,Southeast,SE-Atlanta,GA,Tier 3
+A1136,Dr. Michael Hernandez,Rheumatology,Midwest,MW-Minneapolis,MN,Tier 1
+A1137,Dr. Carlos Ibrahim,Primary Care,Southwest,SW-Phoenix,NM,Tier 3
+A1138,Dr. Rachel Moreau,Endocrinology,Southeast,SE-Miami,FL,Tier 2
+A1139,Dr. Daniel Dubois,Cardiology,West,W-Los Angeles,CA,Tier 3
+A1140,Dr. Julia Walker,Oncology,Northeast,NE-Boston,MA,Tier 2
+A1141,Dr. Laura Miller,Endocrinology,Southeast,SE-Charlotte,NC,Tier 3
+A1142,Dr. James Johnson,Neurology,West,W-Seattle,OR,Tier 3
+A1143,Dr. Daniel Patel,Cardiology,Northeast,NE-New York,NY,Tier 3
+A1144,Dr. Grace Nguyen,Cardiology,Midwest,MW-Chicago,WI,Tier 2
+A1145,Dr. Rachel Johnson,Oncology,West,W-Denver,CO,Tier 3
+A1146,Dr. Nina Mendes,Cardiology,Northeast,NE-Philadelphia,PA,Tier 3
+A1147,Dr. Carlos Moreau,Primary Care,Midwest,MW-Detroit,OH,Tier 1
+A1148,Dr. Rachel Dubois,Neurology,Southwest,SW-Dallas,TX,Tier 2
+A1149,Dr. Victor Sato,Endocrinology,Southeast,SE-Atlanta,SC,Tier 3
+A1150,Dr. Thomas Haddad,Primary Care,Midwest,MW-Minneapolis,MN,Tier 2
+A1151,Dr. Nina Patel,Oncology,Southwest,SW-Phoenix,AZ,Tier 3
+A1152,Dr. Elena Fischer,Rheumatology,Southeast,SE-Miami,FL,Tier 3
+A1153,Dr. Aisha Rossi,Oncology,West,W-Los Angeles,CA,Tier 2
+A1154,Dr. David Kim,Rheumatology,Northeast,NE-Boston,MA,Tier 3
+A1155,Dr. Michael Mendes,Neurology,Southeast,SE-Charlotte,NC,Tier 3
+A1156,Dr. James Patel,Neurology,West,W-Seattle,OR,Tier 2
+A1157,Dr. Samuel Hernandez,Primary Care,Northeast,NE-New York,NJ,Tier 2
+A1158,Dr. Samuel Sato,Oncology,Midwest,MW-Chicago,IL,Tier 2
+A1159,Dr. Daniel Walker,Primary Care,West,W-Denver,CO,Tier 2
+A1160,Dr. Sofia Brennan,Neurology,Northeast,NE-Philadelphia,DE,Tier 3
+A1161,Dr. Sofia Haddad,Cardiology,Midwest,MW-Detroit,MI,Tier 3
+A1162,Dr. David Moreau,Rheumatology,Southwest,SW-Dallas,OK,Tier 1
+A1163,Dr. Priya Chen,Neurology,Southeast,SE-Atlanta,SC,Tier 2
+A1164,Dr. Sarah Larsen,,Midwest,MW-Minneapolis,IA,Tier 1
+A1165,Dr. Victor Patel,Neurology,Southwest,SW-Phoenix,AZ,Tier 3
+A1166,Dr. Ahmed Mendes,Primary Care,Southeast,SE-Miami,FL,Tier 1
+A1167,Dr. James Fischer,Primary Care,West,W-Los Angeles,CA,Tier 2
+A1168,Dr. Laura Garcia,Oncology,Northeast,NE-Boston,NH,Tier 3
+A1169,Dr. Samuel Fischer,Endocrinology,Southeast,SE-Charlotte,VA,Tier 3
+A1170,Dr. Hannah Larsen,Endocrinology,West,W-Seattle,WA,Tier 2
+A1171,Dr. Sarah Ibrahim,Endocrinology,Northeast,NE-New York,NY,Tier 3
+A1172,Dr. Daniel Rossi,Endocrinology,Midwest,MW-Chicago,WI,Tier 3
+A1173,Dr. Robert Patel,Cardiology,West,W-Denver,CO,Tier 3
+A1174,Dr. Nina Ibrahim,Rheumatology,Northeast,NE-Philadelphia,PA,Tier 3
+A1175,Dr. Sarah Moreau,Cardiology,Midwest,MW-Detroit,OH,Tier 1
+A1176,Dr. Thomas Dubois,Rheumatology,Southwest,SW-Dallas,OK,Tier 2
+A1177,Dr. James Haddad,Oncology,Southeast,SE-Atlanta,SC,Tier 1
+A1178,Dr. Ahmed Garcia,Cardiology,Midwest,MW-Minneapolis,IA,Tier 3
+A1179,Dr. Rachel Chen,Cardiology,Southwest,SW-Phoenix,AZ,Tier 3
+A1180,Dr. Laura Schmidt,Oncology,Southeast,SE-Miami,FL,Tier 2
+A1181,Dr. Sarah Kowalski,Rheumatology,West,W-Los Angeles,CA,Tier 2
+A1182,Dr. Laura Dubois,Endocrinology,Northeast,NE-Boston,NH,Tier 2
+A1183,Dr. Grace Okafor,Endocrinology,Southeast,SE-Charlotte,VA,Tier 3
+A1184,Dr. Hannah Brennan,Rheumatology,West,W-Seattle,WA,Tier 1
+A1185,Dr. Hannah Moreau,Endocrinology,Northeast,NE-New York,NY,Tier 2
+A1186,Dr. Omar Larsen,Rheumatology,Midwest,MW-Chicago,IL,Tier 3
+A1187,Dr. Omar Nguyen,Primary Care,West,W-Denver,CO,Tier 3
+A1188,Dr. Rachel Ibrahim,Oncology,Northeast,NE-Philadelphia,PA,Tier 3
+A1189,Dr. Thomas Okafor,Oncology,Midwest,MW-Detroit,OH,Tier 3
+A1190,Dr. Robert Brennan,Rheumatology,Southwest,SW-Dallas,OK,Tier 2
+A1191,Dr. Kevin Miller,Endocrinology,Southeast,SE-Atlanta,SC,Tier 3
+A1192,Dr. James Ibrahim,Primary Care,Midwest,MW-Minneapolis,MN,Tier 1
+A1193,Dr. Samuel Mendes,Neurology,Southwest,SW-Phoenix,AZ,Tier 1
+A1194,Dr. David Garcia,Oncology,Southeast,SE-Miami,FL,Tier 2
+A1195,Dr. Mei Mendes,Rheumatology,West,W-Los Angeles,CA,Tier 1
+A1196,Dr. Carlos Larsen,Oncology,Northeast,NE-Boston,MA,Tier 2
+A1197,Dr. Grace Brennan,Primary Care,Southeast,SE-Charlotte,VA,Tier 1
+A1198,Dr. Victor Johnson,Neurology,West,W-Seattle,WA,Tier 1
+A1199,Dr. Priya Rossi,Primary Care,Northeast,NE-New York,NY,Tier 1
+A1200,Dr. Kevin Hernandez,Rheumatology,Midwest,MW-Chicago,WI,Tier 2
+A1201,Dr. David Ibrahim,Cardiology,West,W-Denver,CO,Tier 1
+A1202,Dr. Elena Johnson,Endocrinology,Northeast,NE-Philadelphia,DE,Tier 3
+A1203,Dr. Laura Walker,Rheumatology,Midwest,MW-Detroit,MI,Tier 3
+A1204,Dr. Carlos Hernandez,Endocrinology,Southwest,SW-Dallas,TX,Tier 3
+A1205,Dr. Priya Larsen,,Southeast,SE-Atlanta,GA,Tier 3
+A1206,Dr. Mei Hernandez,Neurology,Midwest,MW-Minneapolis,MN,Tier 1
+A1207,Dr. Ahmed Miller,Rheumatology,Southwest,SW-Phoenix,AZ,Tier 2
+A1208,Dr. Thomas Larsen,Neurology,Southeast,SE-Miami,FL,Tier 1
+A1209,Dr. Sofia Rossi,Primary Care,West,W-Los Angeles,CA,Tier 1
+A1210,Dr. Robert Dubois,Neurology,Northeast,NE-Boston,MA,Tier 3
+A1211,Dr. Robert Kowalski,Oncology,Southeast,SE-Charlotte,VA,Tier 1
+A1212,Dr. Michael Sato,Neurology,West,W-Seattle,WA,Tier 3
+A1213,Dr. Elena Chen,Rheumatology,Northeast,NE-New York,NJ,Tier 3
+A1214,Dr. Elena Schmidt,Oncology,Midwest,MW-Chicago,WI,Tier 3
+A1215,Dr. Rachel Kowalski,Rheumatology,West,W-Denver,CO,Tier 2
+A1216,Dr. Grace Kowalski,Cardiology,Northeast,NE-Philadelphia,PA,Tier 2
+A1217,Dr. Sofia Kim,Oncology,Midwest,MW-Detroit,MI,Tier 2
+A1218,Dr. Michael Johnson,Oncology,Southwest,SW-Dallas,OK,Tier 3
+A1219,Dr. Elena Patel,Endocrinology,Southeast,SE-Atlanta,SC,Tier 3
+A1220,Dr. David Rossi,Cardiology,Midwest,MW-Minneapolis,MN,Tier 3
+A1221,Dr. Daniel Nguyen,Cardiology,Southwest,SW-Phoenix,NM,Tier 3
+A1222,Dr. James Miller,Rheumatology,Southeast,SE-Miami,FL,Tier 3
+A1223,Dr. Ahmed Sato,Oncology,West,W-Los Angeles,CA,Tier 1
+A1224,Dr. Thomas Fischer,Primary Care,Northeast,NE-Boston,ME,Tier 1
+A1225,Dr. Grace Johnson,Cardiology,Southeast,SE-Charlotte,NC,Tier 3
+A1226,Dr. Sofia Sato,Cardiology,West,W-Seattle,WA,Tier 3
+A1227,Dr. Thomas Sato,Cardiology,Northeast,NE-New York,NJ,Tier 3
+A1228,Dr. Thomas Schmidt,Neurology,Midwest,MW-Chicago,WI,Tier 1
+A1229,Dr. Omar Kowalski,Cardiology,West,W-Denver,CO,Tier 2
+A1230,Dr. Priya Fischer,Rheumatology,Northeast,NE-Philadelphia,DE,Tier 3
+A1231,Dr. Victor Okafor,Oncology,Midwest,MW-Detroit,OH,Tier 2
+A1232,Dr. Michael Patel,Endocrinology,Southwest,SW-Dallas,OK,Tier 2
+A1233,Dr. Hannah Mendes,Cardiology,Southeast,SE-Atlanta,GA,Tier 3
+A1234,Dr. Samuel Schmidt,Cardiology,Midwest,MW-Minneapolis,IA,Tier 3
+A1235,Dr. Elena Nguyen,Cardiology,Southwest,SW-Phoenix,AZ,Tier 2
+A1236,Dr. Rachel Okafor,Endocrinology,Southeast,SE-Miami,FL,Tier 3
+A1237,Dr. Sofia Walker,Rheumatology,West,W-Los Angeles,CA,Tier 3
+A1238,Dr. Sarah Miller,Neurology,Northeast,NE-Boston,ME,Tier 3
+A1239,Dr. Samuel Walker,Neurology,Southeast,SE-Charlotte,NC,Tier 2
+A1240,Dr. Grace Patel,Neurology,West,W-Seattle,WA,Tier 2

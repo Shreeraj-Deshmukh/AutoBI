@@ -1,0 +1,36 @@
+Plan_ID,Plan_Name,Payer,Channel,PBM,Formulary_Status
+PL-0101,UnitedHealthcare HMO,UnitedHealthcare,Commercial,OptumRx,Not Covered (Exception Required)
+PL-0102,UnitedHealthcare EPO,UnitedHealthcare,Commercial,OptumRx,Covered with PA
+PL-0103,UnitedHealthcare HDHP,UnitedHealthcare,Commercial,OptumRx,Covered with PA
+PL-0104,UnitedHealthcare POS,UnitedHealthcare,Commercial,OptumRx,Covered with Step Therapy
+PL-0105,Aetna HMO,Aetna,Commercial,CVS Caremark,Covered with Step Therapy
+PL-0106,Aetna EPO,Aetna,Commercial,CVS Caremark,Covered with PA
+PL-0107,Aetna HDHP,Aetna,Commercial,CVS Caremark,Covered with PA
+PL-0108,Cigna HMO,Cigna,Commercial,Express Scripts,Not Covered (Exception Required)
+PL-0109,Cigna EPO,Cigna,Commercial,Express Scripts,Covered with PA
+PL-0110,Cigna HDHP,Cigna,Commercial,Express Scripts,Not Covered (Exception Required)
+PL-0111,Elevance Health HMO,Elevance Health,Commercial,CarelonRx,Covered with PA
+PL-0112,Elevance Health EPO,Elevance Health,Commercial,CarelonRx,Covered with PA
+PL-0113,Elevance Health HDHP,Elevance Health,Commercial,CarelonRx,Not Covered (Exception Required)
+PL-0114,BCBS (regional plans) HMO,BCBS (regional plans),Commercial,Prime Therapeutics,Covered with PA
+PL-0115,BCBS (regional plans) EPO,BCBS (regional plans),Commercial,Prime Therapeutics,Covered with PA
+PL-0116,BCBS (regional plans) HDHP,BCBS (regional plans),Commercial,Prime Therapeutics,Covered with PA
+PL-0117,BCBS (regional plans) POS,BCBS (regional plans),Commercial,Prime Therapeutics,Covered with PA
+PL-0118,BCBS (regional plans) PPO,BCBS (regional plans),Commercial,Prime Therapeutics,Covered with PA
+PL-0119,Humana Plan 1,Humana,Medicare Part D,CenterWell Pharmacy,Covered with PA
+PL-0120,Humana Plan 2,Humana,Medicare Part D,CenterWell Pharmacy,Covered with PA
+PL-0121,Humana Plan 3,Humana,Medicare Part D,CenterWell Pharmacy,Covered with PA
+PL-0122,UnitedHealthcare Plan 1,UnitedHealthcare,Medicare Part D,OptumRx,Covered with PA
+PL-0123,UnitedHealthcare Plan 2,UnitedHealthcare,Medicare Part D,OptumRx,Covered with PA
+PL-0124,Aetna Plan 1,Aetna,Medicare Part D,CVS Caremark,Not Covered (Exception Required)
+PL-0125,Aetna Plan 2,Aetna,Medicare Part D,CVS Caremark,Covered with PA
+PL-0126,State Medicaid Managed Care 1,State Medicaid,Medicaid,State FFS,Covered with PA
+PL-0127,State Medicaid Managed Care 2,State Medicaid,Medicaid,State FFS,Not Covered (Exception Required)
+PL-0128,State Medicaid Managed Care 3,State Medicaid,Medicaid,State FFS,Covered with Step Therapy
+PL-0129,State Medicaid Managed Care 4,State Medicaid,Medicaid,State FFS,Not Covered (Exception Required)
+PL-0130,Centene Managed Care 1,Centene,Medicaid,Envolve / CVS Caremark,Covered with PA
+PL-0131,Centene Managed Care 2,Centene,Medicaid,Envolve / CVS Caremark,Covered with Step Therapy
+PL-0132,Centene Managed Care 3,Centene,Medicaid,Envolve / CVS Caremark,Covered with PA
+PL-0133,Molina Managed Care 1,Molina,Medicaid,CVS Caremark,Covered with PA
+PL-0134,Molina Managed Care 2,Molina,Medicaid,CVS Caremark,Covered with Step Therapy
+PL-0135,TRICARE Plan 1,TRICARE,Government,Express Scripts,Covered with PA
