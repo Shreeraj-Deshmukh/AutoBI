@@ -64,13 +64,26 @@ In the Data step, click **Databricks / Snowflake**, enter the connection details
 `public/sample-data/access/brief.txt` has the requirement, the files, the live change request and the planned test failure. In short:
 
 1. **Requirements:** paste the brief. The AI writes objectives, user stories, KPIs, filters and rules.
-2. **Data:** attach the three files. The agents profile the data and join the specialty-pharmacy journey to plans and PBMs, and to HCPs and FRM territories.
+2. **Data:** attach the four files. The agents profile the data and join the specialty-pharmacy journey and the FRM case log to plans and PBMs, and to HCPs and FRM territories.
 3. **Reporting Foundation:** KPIs such as patients awaiting PA, PA approval rate, average time to therapy and drop-off rate are proposed and validated against the actual values.
-4. **Design:** a dashboard in three sections — Patient Funnel, Access Barriers and FRM Actionability. Then make the change request:
+4. **Design:** the FRM pages (see *FRM view* below) come first, followed by the patient access overview in three sections: Patient Funnel, Access Barriers and FRM Actionability. Then make the change request:
    - **KPI:** in *Describe a KPI*, enter "patients with PA pending for more than 14 days".
    - **Visual:** in the design assistant, enter "Show HCPs with more than 5 patients delayed in PA".
 5. **Testing:** "Total Patients counts each patient once" fails because re-referrals are counted twice. Fix it by changing the aggregation to COUNT DISTINCT, then re-run. Row-level security for each FRM is tested too.
 6. **Release:** View the dashboard as an FRM to see territory-restricted data, generate the documentation, then publish after UAT.
+
+## FRM view (ProcDNA FRM report + KPI catalogue)
+
+FRMs work individual access cases, so when the data includes an FRM case log (`frm_cases.csv` in the patient-access kit) the agents build the ProcDNA FRM report:
+
+- **Requirements:** an FRM brief that mentions cases gets the case KPIs from the **ProcDNA KPI Catalogue** (sheet *Case and FRM Management*, `src/config/kpiCatalogue.ts`), plus the two FRM pages and an FRM case-level user story.
+- **Reporting Foundation:** catalogue metrics are bound to the data by `src/lib/catalogue.ts`, keeping the catalogue's definition and computation. The **ProcDNA KPI Catalogue** tab shows each of the 62 metrics as *computed*, *same as* another KPI, or *needs data* (with the source the catalogue names, e.g. Veeva CRM logs).
+- **Design Studio** (`src/agents/frmTemplate.ts`):
+  - **Field Reimbursement Management** (the FRM's workbench): case summary cards (Total / Open / Closed / Closure %, time to resolution, time to first fill), resolution rate by case type, Priority Prescribers with flags, Open Case Aging, and the **Open Cases** list. The list has an *Escalated only* toggle; click a case to see where the patient is stuck and the dated journey.
+  - **FRM Performance** (managers and leadership): a territory scorecard (highest / lowest for volume, closure rate, resolution time, open and escalated cases, top recurring prescriber), case volume and closure by territory, FRM response time, case load vs response time, and the **Case Journey** drilldown (region › territory › case type › status).
+- **Testing:** the case list, the scorecard and every catalogue KPI on the dashboard are reconciled against the source rows. **Catalogue Alignment** tests fail if a catalogue KPI is edited away from its catalogue definition.
+
+With Azure AI on, the FRM pages are still laid out from the template, and the model designs only the remaining pages.
 
 ## Field mapping
 
@@ -89,7 +102,7 @@ Two synthetic data kits are included for client demos. They are in `public/sampl
 | Kit | Files | Seeded data issues |
 |---|---|---|
 | HCP Engagement | `account_master.csv`, `call_activity.csv`, `email_activity.json`, `campaign_master.csv` | 4 calls with unknown accounts, 2 duplicate calls, 5 missing specialties |
-| Patient Access (FRM) | `sp_patient_journey.csv`, `payer_plan_pbm.csv`, `hcp_frm_alignment.xlsx` (HCPs + FRM Territories) | 5 re-referred patients (duplicate Patient_ID), 3 cases with an unknown Plan_ID, 4 HCPs without specialty |
+| Patient Access (FRM) | `sp_patient_journey.csv`, `payer_plan_pbm.csv`, `hcp_frm_alignment.xlsx` (HCPs + FRM Territories), `frm_cases.csv` (FRM case log) | 5 re-referred patients (duplicate Patient_ID), 3 patients (and 4 of their cases) with an unknown Plan_ID, 4 HCPs without specialty |
 | Brand Performance | `hcp_universe.csv`, `territory_alignment.xlsx`, `rx_weekly.csv`, `field_calls.json` | 6 Rx rows for unknown HCPs, 8 HCPs without decile, 3 duplicate calls, 4 calls without channel |
 | Retail Sales | `store_and_product_master.xlsx` (2 sheets), `sales_transactions.csv` | 3 sales with unknown products, 8 blank channels |
 

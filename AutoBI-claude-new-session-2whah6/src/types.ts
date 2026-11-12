@@ -107,7 +107,7 @@ export interface ProjectInfo {
 export interface ReqItem {
   id: string;
   text: string;
-  source: 'extracted' | 'user' | 'clarification' | 'default';
+  source: 'extracted' | 'user' | 'clarification' | 'default' | 'catalogue';
 }
 
 export type ClarificationField = 'timeGrain' | 'audience' | 'period' | 'comparison' | 'generic';
@@ -286,7 +286,7 @@ export interface MeasureDef {
   id: string;
   name: string;
   description: string;
-  kind: 'count' | 'countDistinct' | 'sum' | 'avg' | 'ratio';
+  kind: 'count' | 'countDistinct' | 'sum' | 'avg' | 'median' | 'ratio';
   datasetId?: string;
   field?: string;
   condition?: MeasureCondition;
@@ -299,6 +299,31 @@ export interface MeasureDef {
   assumptions: string[];
   requirementRef?: string;
   userModified?: boolean;
+  /** Recipe this measure was bound from (ProcDNA KPI Catalogue metric, FRM report measure or helper). */
+  catalogueRef?: string;
+}
+
+// ── ProcDNA KPI catalogue ─────────────────────────────────────────────────
+export interface CatalogueMetric {
+  category: string;
+  name: string;
+  definition: string;
+  computation: string;
+  dataSource: string;
+  vendors: string;
+  isKpi: boolean;
+  visuals: string;
+  granularity: { geographyLevel: boolean; geographyName: boolean; product: boolean; payer: boolean; accountType: boolean };
+}
+
+export interface CatalogueCoverage {
+  metric: string;
+  category: string;
+  isKpi: boolean;
+  status: 'computed' | 'same_as' | 'needs_data';
+  /** Measure that computes it (status computed / same_as). */
+  measureId?: string;
+  note: string;
 }
 
 export interface Foundation {
@@ -308,10 +333,31 @@ export interface Foundation {
   measures: MeasureDef[];
   gaps: string[];
   assumptions: string[];
+  /** How the ProcDNA KPI catalogue maps onto the uploaded data. */
+  catalogue?: CatalogueCoverage[];
 }
 
 // ── Dashboard design & spec ───────────────────────────────────────────────
-export type ComponentType = 'kpi' | 'bar' | 'hbar' | 'stacked' | 'line' | 'area' | 'donut' | 'table' | 'funnel';
+export type ComponentType =
+  | 'kpi'
+  | 'bar'
+  | 'hbar'
+  | 'stacked'
+  | 'line'
+  | 'area'
+  | 'donut'
+  | 'table'
+  | 'funnel'
+  /** One card with several values (e.g. Cases: Total / Open / Closed / Closure %), or one measure split by `dimension`. */
+  | 'kpiGroup'
+  /** Highest / lowest category of a measure (e.g. closure rate by territory). */
+  | 'extremes'
+  /** Row-level list of the records behind a count measure (e.g. each open case). */
+  | 'records'
+  /** Two measures plotted against each other per category. */
+  | 'scatter'
+  /** Hierarchical drill-down through `levels` (decomposition tree). */
+  | 'drilldown';
 export type TimeGrain = 'week' | 'month' | 'quarter';
 export type PeriodPreset = 'all' | 'last4w' | 'r13w' | 'last6m' | 'ytd' | 'last12m' | 'custom';
 
@@ -332,6 +378,20 @@ export interface DashComponent {
   section?: string;
   /** Only show categories where the first measure exceeds this value (e.g. HCPs with > 5 delayed patients). */
   threshold?: { op: 'gt' | 'gte'; value: number };
+  /** kpiGroup: label shown above each measure's value. */
+  labels?: string[];
+  /** extremes: lower values are better (e.g. resolution time → Fastest / Slowest). */
+  lowIsBest?: boolean;
+  /** extremes: only show the top category, with this attribute beside it (e.g. HCP + account). */
+  topOnly?: FieldRef;
+  /** table: priority flags on the first measure (≥ high → two flags, ≥ medium → one flag). Thresholds left out follow the data: top 10% → two flags, next 25% → one flag. */
+  flags?: { high?: number; medium?: number };
+  /** records: optional toggle that narrows the list (e.g. escalated cases only). */
+  toggle?: { label: string; filter: MeasureCondition[] };
+  /** records: column the list is sorted by, descending. */
+  sortBy?: FieldRef;
+  /** drilldown: hierarchy levels, outermost first. `dimension` mirrors levels[0]. */
+  levels?: FieldRef[];
 }
 
 export interface DashPage {
@@ -339,6 +399,8 @@ export interface DashPage {
   name: string;
   description: string;
   components: DashComponent[];
+  /** Pages laid out from a ProcDNA standard template (e.g. the FRM report). */
+  template?: 'frm';
 }
 
 export interface FilterDef {
@@ -389,7 +451,10 @@ export type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type CheckSpec =
   | { kind: 'kpi_recompute'; measureId: string }
   | { kind: 'ratio_bounds'; measureId: string }
-  | { kind: 'group_recompute'; componentId: string }
+  | { kind: 'group_recompute'; componentId: string; measureId?: string }
+  | { kind: 'records'; componentId: string }
+  | { kind: 'extremes'; componentId: string }
+  | { kind: 'catalogue'; measureId: string }
   | { kind: 'group_rollup'; componentId: string }
   | { kind: 'series_recompute'; componentId: string }
   | { kind: 'table_total'; componentId: string }

@@ -20,7 +20,7 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
   const qc: Draft[] = [];
   const pre = `Dashboard v${build.version} generated; default period ${PERIOD_LABELS[spec.defaultPeriod]}; no filters applied unless stated.`;
   const dsOf = (c: DashComponent) => [...new Set(c.measureIds.map((m) => f.measures.find((x) => x.id === m)).flatMap((m) => (m?.datasetId ? [m.datasetId] : f.measures.filter((x) => x.id === m?.numeratorId || x.id === m?.denominatorId).map((x) => x.datasetId!))))].map(label).join(', ');
-  const ELEMENT: Record<string, string> = { kpi: 'KPI Card', bar: 'Bar Chart', hbar: 'Bar Chart', stacked: 'Stacked Bar Chart', line: 'Line Chart', area: 'Area Chart', donut: 'Donut Chart', table: 'Table', Filter: 'Filter', Page: 'Page Tab' };
+  const ELEMENT: Record<string, string> = { kpi: 'KPI Card', bar: 'Bar Chart', hbar: 'Bar Chart', stacked: 'Stacked Bar Chart', line: 'Line Chart', area: 'Area Chart', donut: 'Donut Chart', table: 'Table', kpiGroup: 'KPI Card', extremes: 'KPI Card', records: 'Case List', scatter: 'Scatter Plot', drilldown: 'Decomposition Tree', Filter: 'Filter', Page: 'Page Tab' };
   const add = (category: 'Interactivity' | 'Functional' | 'UI/UX', page: DashPage | null, element: string, elementType: string, steps: string[], expected: string, check: CheckSpec | null, priority: Priority = 'High', testData = 'Generated dashboard') =>
     tech.push(base({ suite: 'technical', category, page: page?.name ?? 'All pages', component: element, elementType, objective: steps.join(' '), preconditions: pre, steps, testData, expected, priority, execution: check ? 'Automated' : 'Manual', ...(check ? { check } : {}) }));
   const valuesOf = (ref?: string) => {
@@ -58,6 +58,35 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
       const ds = dsOf(c);
       if (c.type === 'kpi') {
         add('Functional', pg, c.title, el, [`1. Verify that the ${c.title} card shows the value for the selected period.`, '2. Verify that the change versus the previous period is shown with the correct direction.'], `${c.title} shows the correct value (${m?.logic ?? ''}) and period-over-period change.`, { kind: 'kpi_recompute', measureId: c.measureIds[0] }, 'Critical', ds);
+        continue;
+      }
+      if (c.type === 'kpiGroup') {
+        if (c.dimension) add('Functional', pg, c.title, el, [`1. Verify that the ${c.title} card shows ${m?.name ?? 'the measure'} for each ${dimName}${valuesOf(c.dimension)}.`, '2. Check each value against the source data.'], `Each ${dimName} value of ${c.title} matches the source.`, { kind: 'group_recompute', componentId: c.id }, 'Critical', ds);
+        else
+          c.measureIds.forEach((mid, i) => {
+            const mm = f.measures.find((x) => x.id === mid);
+            add('Functional', pg, `${c.title} – ${c.labels?.[i] ?? mm?.name}`, el, [`1. Verify that the "${c.labels?.[i] ?? mm?.name}" value on the ${c.title} card is shown for the selected period.`, '2. Check the value against the source data.'], `${mm?.name} shows the correct value (${mm?.logic ?? ''}).`, { kind: 'kpi_recompute', measureId: mid }, 'Critical', ds);
+          });
+        continue;
+      }
+      if (c.type === 'extremes') {
+        add('Functional', pg, c.title, el, [`1. Verify that ${c.title} names the highest and lowest ${dimName}${c.lowIsBest ? ' (fastest and slowest)' : ''}.`, '2. Recompute the measure for every category and compare.'], `The highest and lowest ${dimName} and their values match the source data.`, { kind: 'extremes', componentId: c.id }, 'High', ds);
+        continue;
+      }
+      if (c.type === 'records') {
+        const colNames = (c.tableColumns ?? []).map((x) => fieldLabel(f, x));
+        add('Functional', pg, c.title, el, [`1. Verify that ${c.title} lists every record counted by ${m?.name}.`, `2. Check that the columns (${colNames.join(', ')}) are populated${c.toggle ? ` and that "${c.toggle.label}" narrows the list` : ''}.`], `Every ${m?.name?.toLowerCase()} record is listed once with its details${c.toggle ? `; the "${c.toggle.label}" toggle shows only matching records` : ''}.`, { kind: 'records', componentId: c.id }, 'Critical', ds);
+        add('Interactivity', pg, c.title, el, ['1. Click a case in the list.', '2. Verify that the case detail shows the patient journey dates in order and the case attributes.'], 'The case detail opens with the full journey timeline for that patient.', null, 'Medium', ds);
+        continue;
+      }
+      if (c.type === 'scatter') {
+        c.measureIds.slice(0, 2).forEach((mid, i) => add('Functional', pg, c.title, el, [`1. Verify the ${i ? 'vertical' : 'horizontal'} position of each ${dimName} point (${f.measures.find((x) => x.id === mid)?.name}).`, '2. Compare with the source data.'], `Every point's ${f.measures.find((x) => x.id === mid)?.name} matches the source.`, { kind: 'group_recompute', componentId: c.id, measureId: mid }, 'High', ds));
+        continue;
+      }
+      if (c.type === 'drilldown') {
+        const lv = (c.levels ?? []).map((x) => fieldLabel(f, x));
+        add('Functional', pg, c.title, el, [`1. Verify the first level (${lv[0]}) of ${c.title} against the source.`, `2. Click through ${lv.join(' → ')} and check that each level adds up to the level above.`], `Each level of the drilldown matches the source and sums to its parent.`, { kind: 'group_recompute', componentId: c.id }, 'High', ds);
+        add('Interactivity', pg, c.title, el, [`1. Click a bar at each level (${lv.join(' → ')}).`, '2. Verify the next level opens filtered to the selection, and that clicking again collapses it.'], 'Drilling opens the next level for the clicked node only.', null, 'Medium', ds);
         continue;
       }
       if (c.type === 'funnel') {
@@ -149,6 +178,14 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
     if (m && m.kind === 'count' && prof?.primaryKey && m.field === prof.primaryKey) qcAdd('Calculation Accuracy', c.title, `Confirm ${c.title} counts each ${prof.entity.toLowerCase()} once (unique ${m.field})`, `${c.title} equals the number of unique ${m.field} values`, { kind: 'unique_count', measureId: m.id }, 'Critical', p.name);
   }
   for (const { p, c } of all.filter(({ c }) => c.type === 'funnel')) qcAdd('Data Integrity', c.title, 'Validate funnel stage counts against the source journey data', 'Every stage reconciles to source records', { kind: 'funnel', componentId: c.id }, 'Critical', p.name);
+  for (const { p, c } of all.filter(({ c }) => c.type === 'records')) qcAdd('Case Integrity', c.title, 'Confirm every open case in the source appears in the FRM case list exactly once', 'Case list count equals the open-case count in the source', { kind: 'records', componentId: c.id }, 'Critical', p.name);
+  for (const { p, c } of all.filter(({ c }) => c.type === 'extremes' && c.dimension && /territor|region|district/i.test(c.dimension))) qcAdd('Hierarchy Validation', c.title, `Validate the highest and lowest ${fieldLabel(f, c.dimension!).toLowerCase()} for ${c.title.toLowerCase()}`, 'Territory scorecard names the right territories', { kind: 'extremes', componentId: c.id }, 'High', p.name);
+  // ProcDNA KPI catalogue: every catalogue KPI on the dashboard must still follow the catalogue definition
+  const onDash = new Set(all.flatMap(({ c }) => c.measureIds));
+  for (const m of f.measures.filter((x) => x.catalogueRef && onDash.has(x.id))) {
+    const pg = all.find(({ c }) => c.measureIds.includes(m.id))!.p.name;
+    qcAdd('Catalogue Alignment', m.name, `Confirm ${m.name} follows the ProcDNA KPI Catalogue definition and reconciles to source`, 'Dashboard logic equals the catalogue computation and the value matches the source data', { kind: 'catalogue', measureId: m.id }, 'High', pg);
+  }
   if (FEATURES.rowLevelSecurity && detectRoster(u)) qcAdd('Access Control', 'Row-level security', 'Confirm each FRM sees only their authorised territory data', 'Users see only authorised rows and their numbers reconcile', { kind: 'rls' }, 'Critical');
   qcAdd('Filter Functionality', 'Filters', 'Apply multiple filters and verify all sections update', 'All relevant visuals update correctly', { kind: 'multi_filter' }, 'High');
   qcAdd('Default Behavior', 'Filters', 'Validate the default reporting period', `Default period is ${PERIOD_LABELS[spec.defaultPeriod]} anchored on the latest data date`, { kind: 'default_period' }, 'Medium');
@@ -160,4 +197,4 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
 
 export const TEST_CATEGORIES = ['Interactivity', 'Functional', 'UI/UX'];
 export const SUITE_LABEL = { technical: 'Functional Testing', qc: 'Data Validation Testing' } as const;
-export const QC_CATEGORIES = ['Data Integrity', 'Hierarchy Validation', 'Calculation Accuracy', 'Tier Mapping', 'Period Comparison', 'Outlier Detection', 'Engagement Accuracy', 'Timeline Validation', 'Campaign Correlation', 'HCP Matching', 'Activity Alignment', 'Roll-up Total Accuracy', 'Filter Functionality', 'Default Behavior', 'Business Rule', 'Access Control'];
+export const QC_CATEGORIES = ['Data Integrity', 'Hierarchy Validation', 'Calculation Accuracy', 'Tier Mapping', 'Period Comparison', 'Outlier Detection', 'Engagement Accuracy', 'Timeline Validation', 'Campaign Correlation', 'HCP Matching', 'Activity Alignment', 'Roll-up Total Accuracy', 'Filter Functionality', 'Default Behavior', 'Business Rule', 'Access Control', 'Case Integrity', 'Catalogue Alignment'];

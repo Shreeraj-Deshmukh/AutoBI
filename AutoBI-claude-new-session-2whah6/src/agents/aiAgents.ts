@@ -6,6 +6,8 @@ import type { Clarification, DashboardSpec, DataUnderstanding, Foundation, Proje
 import { chatJSON } from './llm';
 import { applyDesignCommand } from './designAgent';
 import { uid } from '@/lib/util';
+import { FRM_REQUIREMENT_KPIS } from '@/lib/catalogue';
+import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
 
 /**
  * AI-backed agent behaviours (Azure AI Foundry). Each function returns the same
@@ -57,11 +59,25 @@ function toSpec(j: ReqJson, base: RequirementSpec): RequirementSpec {
   return spec;
 }
 
+/** FRM / case-management briefs are specified against the ProcDNA KPI catalogue. */
+const isFrmCaseBrief = (text: string) => /\bFRMs?\b|field reimbursement/i.test(text) && /\bcases?\b/i.test(text);
+const FRM_REQ_RULES = `This is a Field Reimbursement Manager (FRM) / case-management dashboard. FRMs work individual access cases: they need the case list (patient, HCP, payer, case type, priority, days open, where the patient is stuck), while managers compare territories.
+- Use these ProcDNA KPI Catalogue metric names verbatim for case KPIs where they fit: ${FRM_REQUIREMENT_KPIS.join('; ')}.
+- Other catalogue metrics you may use (verbatim): ${KPI_CATALOGUE.filter((m) => m.isKpi).map((m) => m.name).join('; ')}.
+- "pages": start with "Field Reimbursement Management" (FRM case workbench) and "FRM Performance" (territory deep dive).`;
+
 export async function aiExtractRequirements(narrative: string, info: ProjectInfo, base: RequirementSpec): Promise<RequirementSpec> {
   const brief = `Project: ${info.name}\nDomain: ${info.domain}\nObjective: ${info.objective}\nAudience: ${info.audience || '(not given)'}\nFrequency: ${info.frequency || '(not given)'}\nPeriod: ${info.period || '(not given)'}\nKey questions: ${info.keyQuestions.join('; ') || '(none)'}`;
-  const j = await chatJSON<ReqJson>(`${REQ_RULES}\nReturn JSON with exactly these keys: ${SCHEMA}`, `${brief}\n\nRequirement:\n${narrative}`);
+  const frm = isFrmCaseBrief(narrative);
+  const j = await chatJSON<ReqJson>(`${REQ_RULES}${frm ? `\n${FRM_REQ_RULES}` : ''}\nReturn JSON with exactly these keys: ${SCHEMA}`, `${brief}\n\nRequirement:\n${narrative}`);
   const spec = toSpec(j, base);
   if (!spec.kpis.length) throw new Error('AI returned no KPIs');
+  if (frm) {
+    // keep the catalogue KPIs and FRM pages the rules derived, in case the model left some out
+    const lower = new Set(spec.kpis.map((k) => k.text.toLowerCase()));
+    spec.kpis = [...spec.kpis, ...base.kpis.filter((k) => k.source === 'catalogue' && !lower.has(k.text.toLowerCase()))];
+    for (const pg of ['FRM Performance', 'Field Reimbursement Management']) if (!spec.pages.some((x) => x.text.toLowerCase() === pg.toLowerCase())) spec.pages = [{ id: uid('req'), text: pg, source: 'catalogue' }, ...spec.pages];
+  }
   return spec;
 }
 
@@ -179,7 +195,7 @@ function dataContext(u: DataUnderstanding) {
   return u.profiles.map((p) => ({ dataset: p.datasetId, label: p.label, kind: p.kind, rows: p.rowCount, primaryKey: p.primaryKey, uniqueKeys: p.columns.find((c) => c.name === p.primaryKey)?.distinct, columns: p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role, ...(c.distinct <= 15 && c.type !== 'date' ? { values: c.topValues.map((v) => v.value) } : {}) })) }));
 }
 
-const MEASURE_RULES = `Measures use: aggregation count | countDistinct | sum | avg | ratio. "dataset" is a dataset id, "field" a column of it.
+const MEASURE_RULES = `Measures use: aggregation count | countDistinct | sum | avg | median | ratio. "dataset" is a dataset id, "field" a column of it.
 "conditions" filter rows (all must hold): op eq | neq (values = exact column values from the data) | gt | gte | lt | lte (values = [number]) | notnull.
 A ratio uses "numerator" and "denominator" = names of other measures (existing or in your list) and format "percent".
 Count people/patients with countDistinct on their ID if the ID repeats. Durations use avg. Never invent columns or values.`;
@@ -193,7 +209,7 @@ export function materializeMeasures(items: MeasureJson[], u: DataUnderstanding, 
   for (const it of items) {
     const name = String(it.name ?? '').trim();
     const agg = String(it.aggregation ?? '');
-    if (!name || !['count', 'countDistinct', 'sum', 'avg', 'ratio'].includes(agg)) { rejected.push(`${name || '(unnamed)'}: unsupported aggregation`); continue; }
+    if (!name || !['count', 'countDistinct', 'sum', 'avg', 'median', 'ratio'].includes(agg)) { rejected.push(`${name || '(unnamed)'}: unsupported aggregation`); continue; }
     if (byName(name)) continue;
     if (agg === 'ratio') { pending.push(it); continue; }
     const p = u.profiles.find((x) => x.datasetId === it.dataset || x.label.toLowerCase() === String(it.dataset ?? '').toLowerCase());
@@ -201,7 +217,7 @@ export function materializeMeasures(items: MeasureJson[], u: DataUnderstanding, 
     const col = (n?: string) => p.columns.find((c) => c.name.toLowerCase() === String(n ?? '').toLowerCase());
     const field = it.field ? col(it.field) : undefined;
     if (it.field && !field) { rejected.push(`${name}: unknown field ${it.field}`); continue; }
-    if ((agg === 'sum' || agg === 'avg') && field?.role !== 'measure' && field?.type !== 'integer' && field?.type !== 'number') { rejected.push(`${name}: ${it.field} is not numeric`); continue; }
+    if ((agg === 'sum' || agg === 'avg' || agg === 'median') && field?.role !== 'measure' && field?.type !== 'integer' && field?.type !== 'number') { rejected.push(`${name}: ${it.field} is not numeric`); continue; }
     const conds: MeasureCondition[] = [];
     let bad = '';
     for (const c of it.conditions ?? []) {
@@ -216,7 +232,7 @@ export function materializeMeasures(items: MeasureJson[], u: DataUnderstanding, 
       conds.push({ field: cc.name, op, values });
     }
     if (bad) { rejected.push(`${name}: ${bad}`); continue; }
-    out.push({ id: uid('m'), name, description: String(it.description ?? ''), kind: agg as MeasureDef['kind'], datasetId: p.datasetId, field: field?.name ?? (agg.startsWith('count') ? p.primaryKey : undefined), condition: conds[0], conditions: conds.slice(1), format: (['number', 'percent', 'decimal'].includes(String(it.format)) ? it.format : agg === 'avg' ? 'decimal' : 'number') as MeasureDef['format'], logic: '', assumptions: ['Proposed by the AI model and validated against the data — review before approval.'], requirementRef: it.requirement ? String(it.requirement) : undefined });
+    out.push({ id: uid('m'), name, description: String(it.description ?? ''), kind: agg as MeasureDef['kind'], datasetId: p.datasetId, field: field?.name ?? (agg.startsWith('count') ? p.primaryKey : undefined), condition: conds[0], conditions: conds.slice(1), format: (['number', 'percent', 'decimal'].includes(String(it.format)) ? it.format : agg === 'avg' || agg === 'median' ? 'decimal' : 'number') as MeasureDef['format'], logic: '', assumptions: ['Proposed by the AI model and validated against the data — review before approval.'], requirementRef: it.requirement ? String(it.requirement) : undefined });
   }
   for (const it of pending) {
     const n = byName(it.numerator);
@@ -230,7 +246,7 @@ export function materializeMeasures(items: MeasureJson[], u: DataUnderstanding, 
 export async function aiProposeMeasures(spec: RequirementSpec | null, u: DataUnderstanding, existing: MeasureDef[]) {
   const j = await chatJSON<{ measures?: MeasureJson[] }>(
     `You are the Reporting Foundation Agent. Define the KPI measures needed for the requirements, grounded only in the datasets given.\n${MEASURE_RULES}\nReturn {"measures":[{"name","description","aggregation","dataset","field","conditions","numerator","denominator","format","requirement"}]} — one entry per requirement KPI (plus any numerator/denominator a ratio needs). Use the requirement's wording for "name" and copy the KPI text into "requirement".`,
-    `Requirement KPIs: ${JSON.stringify(spec?.kpis.map((k) => k.text) ?? [])}\nBusiness rules: ${JSON.stringify(spec?.rules.map((k) => k.text) ?? [])}\nExisting measures: ${JSON.stringify(existing.map((m) => m.name))}\nDatasets: ${JSON.stringify(dataContext(u))}`,
+    `Requirement KPIs: ${JSON.stringify(spec?.kpis.map((k) => k.text) ?? [])}\nBusiness rules: ${JSON.stringify(spec?.rules.map((k) => k.text) ?? [])}\nExisting measures (already defined, several from the ProcDNA KPI Catalogue — do not redefine them): ${JSON.stringify(existing.map((m) => (m.catalogueRef ? `${m.name} [catalogue: ${m.catalogueRef}]` : m.name)))}\nDatasets: ${JSON.stringify(dataContext(u))}`,
     { maxTokens: 3500 },
   );
   const res = materializeMeasures(j.measures ?? [], u, existing);
@@ -257,8 +273,11 @@ interface CompJson { type?: string; title?: string; measures?: string[]; dimensi
 export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spec: RequirementSpec | null, fallback: DashboardSpec): Promise<DashboardSpec> {
   const u = { ...u0, profiles: visibleProfiles(u0.profiles, f) };
   const fields = u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => ({ column: c.name, label: fieldLabel(f, fref(p.datasetId, c.name)), dataset: p.label })));
+  // pages from the ProcDNA FRM report template are laid out deterministically; the model designs the rest
+  const templated = fallback.pages.filter((p) => p.template);
+  const templateNote = templated.length ? `\nThese pages are already built from the ProcDNA FRM report template — do NOT repeat them or their content; design 1–2 additional pages only (e.g. the patient access funnel and barriers): ${templated.map((p) => `"${p.name}" (${p.components.map((c) => c.title).join(', ')})`).join('; ')}.` : '';
   const j = await chatJSON<{ pages?: { name?: string; description?: string; sections?: { name?: string; components?: CompJson[] }[] }[]; filters?: string[] }>(
-    `You are the Dashboard Design Agent. Design a Power BI-style dashboard for the requirements using ONLY the measures and fields listed.
+    `You are the Dashboard Design Agent. Design a Power BI-style dashboard for the requirements using ONLY the measures and fields listed.${templateNote}
 Component types: kpi (one measure), funnel (2–6 count measures in stage order), bar, hbar (needs dimension; use topN 10 for long lists), donut (≤6 categories), line (time trend, 1–3 measures), table (dimension + measures; "threshold" keeps rows whose first measure is greater than it), stacked (dimension + series).
 Width is out of 12. Group components into named sections in reading order (headline first, then drivers, then action lists). Prefer one or two focused pages over many; at most 6 KPI cards per page and at most 6 filters.
 Return {"pages":[{"name","description","sections":[{"name","components":[{"type","title","measures":[measure names],"dimension":"column","series":"column","width","topN","threshold","description"}]}]}],"filters":["column", ...]}`,
@@ -292,13 +311,15 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
         valid++;
       }
     }
-    if (comps.length) pages.push({ id: uid('pg'), name: String(pg.name ?? `Page ${pages.length + 1}`), description: String(pg.description ?? ''), components: comps });
+    const name = String(pg.name ?? `Page ${pages.length + 1}`);
+    if (comps.length && !templated.some((t) => t.name.toLowerCase() === name.toLowerCase())) pages.push({ id: uid('pg'), name, description: String(pg.description ?? ''), components: comps });
   }
-  if (valid < 4) throw new Error(`AI design had only ${valid} component(s) that match the model`);
-  const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }];
+  if (valid < (templated.length ? 2 : 4)) throw new Error(`AI design had only ${valid} component(s) that match the model`);
+  pages.unshift(...templated);
+  const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }, ...(templated.length ? fallback.filters.filter((x) => x.type === 'multi') : [])];
   for (const name of (j.filters ?? []).slice(0, 6)) {
     const r = fieldRef(String(name));
-    if (r && filters.length < 7 && !filters.some((x) => x.field === r)) filters.push({ id: uid('flt'), label: fieldLabel(f, r), type: 'multi', field: r });
+    if (r && filters.length < (templated.length ? 9 : 7) && !filters.some((x) => x.field === r)) filters.push({ id: uid('flt'), label: fieldLabel(f, r), type: 'multi', field: r });
   }
   for (const x of fallback.filters) if (x.type === 'multi' && !filters.some((y) => y.field === x.field) && filters.length < 3) filters.push(x);
   return { ...fallback, pages, filters };

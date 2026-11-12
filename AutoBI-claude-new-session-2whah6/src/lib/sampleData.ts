@@ -474,7 +474,114 @@ export function generateAccessData() {
   });
   [55, 300, 640].forEach((k) => (journey[k].Plan_ID = 'PL-9999'));
   journey.sort((a, b) => String(a.Referral_Date).localeCompare(String(b.Referral_Date)));
-  return { journey, plans, hcps, territories };
+  const cases = generateFrmCases(journey, hcps, asOf);
+  return { journey, plans, hcps, territories, cases };
+}
+
+/**
+ * FRM case log: one row per access case an FRM works for a patient (benefit investigation,
+ * PA support, appeal, reimbursement support, query). Derived from the patient journey so
+ * cases line up with each patient's stage, and uses its own seed so the journey, plan and
+ * HCP files stay exactly as they were. Territories differ in how fast their FRM responds
+ * and works cases, which is what the FRM Performance view surfaces.
+ */
+function generateFrmCases(journey: Row[], hcps: Row[], asOf: number): Row[] {
+  const r = seeded(27182);
+  const DAY_MS = 86_400_000;
+  const terrOf = new Map(hcps.map((h) => [String(h.HCP_ID), String(h.Territory_ID)]));
+  // execution pace per FRM territory (1 = typical; higher = slower response and longer case cycles)
+  const PACE: Record<string, number> = { 'FRM-01': 0.9, 'FRM-02': 1.5, 'FRM-03': 1.0, 'FRM-04': 0.8, 'FRM-05': 1.3, 'FRM-06': 1.6, 'FRM-07': 0.7, 'FRM-08': 1.1, 'FRM-09': 1.2, 'FRM-10': 0.9, 'FRM-11': 0.8, 'FRM-12': 1.4 };
+  const day = (v: unknown) => (v ? Date.parse(String(v)) : null);
+  const iso = (t: number | null) => (t == null ? null : new Date(t).toISOString().slice(0, 10));
+  const days = (a: number, b: number) => Math.round((b - a) / DAY_MS);
+  const raw: Row[] = [];
+  const add = (j: Row, type: string, open: number, close: number | null, secured: boolean | null, detail: string) => {
+    const pace = PACE[terrOf.get(String(j.HCP_ID)) ?? ''] ?? 1;
+    open = Math.min(open, asOf);
+    // a case is only closed if its resolution has already happened
+    if (close != null && close > asOf) close = null;
+    if (close != null && close <= open) close = open + DAY_MS;
+    if (close != null && close > asOf) close = null;
+    const status = close == null ? 'Open' : 'Closed';
+    let response: number | null = Math.round((r.int(0, 3) + (type === 'Appeals' ? 1 : 0)) * pace);
+    if (close != null) response = Math.min(response, days(open, close));
+    if (open + response * DAY_MS > asOf) response = null; // not yet actioned
+    const age = days(open, close ?? asOf);
+    const escalateP = status === 'Open' ? (age > 21 ? 0.5 : age > 14 ? 0.3 : 0.04) * pace : type === 'Appeals' ? 0.22 * pace : 0.06 * pace;
+    const escalated = age >= 6 && r.next() < escalateP;
+    const escDate = escalated ? open + Math.min(age - 1, r.int(5, Math.max(5, age - 1))) * DAY_MS : null;
+    const priority = escalated || (status === 'Open' && age > 21) ? 'High' : type === 'Appeals' || type === 'PA Support' ? r.weighted([['Medium', 60], ['High', 25], ['Low', 15]] as const) : r.weighted([['Low', 55], ['Medium', 45]] as const);
+    const bucket = status !== 'Open' ? null : age <= 7 ? '0-7 days' : age <= 14 ? '8-14 days' : age <= 21 ? '15-21 days' : age <= 30 ? '22-30 days' : '30+ days';
+    raw.push({
+      Case_ID: '',
+      Patient_ID: j.Patient_ID,
+      HCP_ID: j.HCP_ID,
+      Plan_ID: j.Plan_ID,
+      Case_Type: type,
+      Priority: priority,
+      Case_Status: status,
+      Escalation_Flag: escalated ? 'Escalated' : 'Not Escalated',
+      Resolution_Type: status === 'Closed' ? (secured ? 'Access Secured' : 'Access Not Secured') : null,
+      Case_Open_Date: iso(open),
+      First_FRM_Action_Date: response == null ? null : iso(open + response * DAY_MS),
+      Escalation_Date: iso(escDate),
+      Case_Close_Date: iso(close),
+      FRM_Response_Days: response,
+      Days_to_Resolution: close == null ? null : days(open, close),
+      Days_Open: status === 'Open' ? age : null,
+      Days_Since_Escalation: status === 'Open' && escDate != null ? days(escDate, asOf) : null,
+      Aging_Bucket: bucket,
+      Case_Details: detail,
+    });
+  };
+  const APPEAL_DETAIL: Record<string, string> = {
+    'PA Denied - Medical Necessity': 'Letter of medical necessity requested for appeal.',
+    'Non-Formulary': 'Formulary exception request submitted; awaiting payer review.',
+    'Step Therapy Required': 'Step-therapy exception appeal pending with payer.',
+    'Missing Documentation': '2 denials despite correct documentation submitted.',
+    'High Out-of-Pocket Cost': 'Appeal pending; patient cost-share concern raised by HCP office.',
+  };
+  for (const j of journey) {
+    if (j.Discontinuation_Reason === 'Re-referred') continue;
+    const pace = PACE[terrOf.get(String(j.HCP_ID)) ?? ''] ?? 1;
+    const stage = String(j.Current_Stage);
+    const barrier = String(j.Access_Barrier);
+    const ref = day(j.Referral_Date)!;
+    const bv = day(j.BV_Complete_Date);
+    const paSub = day(j.PA_Submitted_Date);
+    const dec = day(j.PA_Decision_Date);
+    const start = day(j.Therapy_Start_Date);
+    // benefit investigation
+    if (stage === 'Benefits Verification') add(j, 'Benefit Investigation', ref + DAY_MS, null, null, barrier === 'Missing Documentation' ? 'Benefit investigation on hold: awaiting insurance details from HCP office.' : 'Benefit investigation in progress with payer.');
+    else if (bv && r.next() < 0.12) add(j, 'Benefit Investigation', ref + DAY_MS, bv + Math.round(r.int(0, 4) * pace) * DAY_MS, true, 'Benefits verified; PA requirements confirmed with payer.');
+    // prior authorization support
+    if (stage === 'PA Pending' && paSub) add(j, 'PA Support', paSub, null, null, barrier === 'Missing Documentation' ? 'Awaiting missing documentation from HCP office.' : 'Authorization pending after repeated payer follow-up.');
+    else if (paSub && dec && j.PA_Outcome) {
+      const slow = days(paSub, dec) > 25;
+      if (r.next() < (slow ? 0.6 : 0.22)) {
+        const firstDecision = j.PA_Outcome === 'Approved on Appeal' ? paSub + r.int(10, 22) * DAY_MS : dec;
+        add(j, 'PA Support', paSub, firstDecision + Math.round(r.int(0, 3) * pace) * DAY_MS, j.PA_Outcome === 'Approved', j.PA_Outcome === 'Approved' ? 'PA approved after FRM-supported submission.' : 'PA denied by payer; appeal route reviewed with HCP office.');
+      }
+    }
+    // appeals
+    if (stage === 'Appeal' && dec) add(j, 'Appeals', dec + r.int(1, 3) * DAY_MS, null, null, APPEAL_DETAIL[barrier] ?? 'Appeal submitted; awaiting payer decision.');
+    else if (j.PA_Outcome === 'Approved on Appeal' && paSub && dec) add(j, 'Appeals', Math.min(paSub + r.int(14, 26) * DAY_MS, dec - 3 * DAY_MS), dec, true, 'Denial overturned on appeal.');
+    else if (j.PA_Outcome === 'Denied' && j.Discontinuation_Reason === 'Coverage Denied' && dec && r.next() < 0.6) add(j, 'Appeals', dec + r.int(1, 3) * DAY_MS, Math.min(dec + Math.round(r.int(12, 28) * pace) * DAY_MS, asOf - DAY_MS), false, 'Appeal upheld the denial; patient discontinued.');
+    // reimbursement support (cost / copay)
+    if (barrier === 'High Out-of-Pocket Cost' && (dec ?? paSub)) add(j, 'Reimbursement Support', (dec ?? paSub)! + DAY_MS, stage === 'Discontinued' ? (dec ?? paSub)! + Math.round(r.int(6, 16) * pace) * DAY_MS : null, false, 'Patient cost-share too high; foundation assistance being explored.');
+    else if (j.Copay_Program === 'Not Enrolled' && dec && (stage === 'Therapy Initiated' || stage === 'PA Approved') && r.next() < 0.5) add(j, 'Reimbursement Support', dec + DAY_MS, start, true, 'Copay program enrollment support for commercially insured patient.');
+    // queries
+    if (barrier === 'Patient Unreachable') {
+      const o = (bv ?? ref) + 2 * DAY_MS;
+      add(j, 'Queries', o, o + Math.round(r.int(8, 20) * pace) * DAY_MS, false, 'Patient unreachable after multiple outreach attempts.');
+    } else if (r.next() < 0.06) {
+      const o = ref + r.int(2, 30) * DAY_MS;
+      add(j, 'Queries', o, o + Math.round(r.int(1, 6) * pace) * DAY_MS, true, r.next() < 0.5 ? 'HCP office query on PA requirements resolved.' : 'Specialty pharmacy coordination query resolved.');
+    }
+  }
+  raw.sort((a, b) => String(a.Case_Open_Date).localeCompare(String(b.Case_Open_Date)) || String(a.Patient_ID).localeCompare(String(b.Patient_ID)));
+  raw.forEach((c, i) => (c.Case_ID = `CASE${pad(i + 101, 6)}`));
+  return raw;
 }
 
 export const ACCESS_NARRATIVE = `Create a patient access dashboard for Spacysla, our newly launched rare disease therapy, for the Field Reimbursement Manager (FRM) team.
@@ -484,4 +591,6 @@ The dashboard should:
 - Highlight prior authorization and reimbursement barriers.
 - Analyze issues by payer, plan, and PBM.
 - Identify HCPs associated with access challenges.
+- Give each FRM a case-level view: every open access case with the patient, HCP, payer, case type, priority, days open and where the patient is stuck.
+- Compare FRM performance across territories: case volume, closure rate, resolution time, response time and escalations.
 - Allow FRMs to filter by territory, HCP, and payer.`;

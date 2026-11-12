@@ -3,6 +3,8 @@ import { Engine, display, splitRef, type FilterState } from '@/lib/engine';
 import { conditionsOf, test as testCond } from '@/lib/conditions';
 import { rowsVersion } from '@/lib/rowStore';
 import { bucketOf, fmtPeriod, parseDate, previousPeriod, resolvePeriod, toIsoDate, type Period } from '@/lib/dates';
+import { bindCatalogue } from '@/lib/catalogue';
+import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
 
 /**
  * Independent validators used by the Testing Agent.
@@ -95,6 +97,13 @@ function indAgg(m: MeasureDef, rows: Row[]): number {
     const ns = rs.map((r) => r[m.field!]).filter((v): v is number => typeof v === 'number');
     return ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : 0;
   }
+  if (m.kind === 'median') {
+    // independent median: middle element(s) of the sorted values
+    const ns = rs.map((r) => r[m.field!]).filter((v): v is number => typeof v === 'number').sort((a, b) => a - b);
+    if (!ns.length) return 0;
+    const h = ns.length >> 1;
+    return ns.length & 1 ? ns[h] : (ns[h - 1] + ns[h]) / 2;
+  }
   return 0;
 }
 
@@ -186,7 +195,7 @@ export function runCheck(check: CheckSpec, ctx: Ctx): CheckResult {
     case 'group_recompute': {
       const c = comp(ctx, check.componentId);
       if (!c?.dimension) return { status: 'Blocked', actual: 'Component no longer exists or has no dimension.', evidence: '' };
-      const mid = c.measureIds[0];
+      const mid = check.measureId && c.measureIds.includes(check.measureId) ? check.measureId : c.measureIds[0];
       const dash = new Map(E.group(mid, c.dimension, f, { topN: c.topN, threshold: c.threshold }).map((g) => [g.key, g.value]));
       const src = indGroup(ctx, mid, c.dimension, f, current);
       if (c.topN) for (const k of [...src.keys()]) if (!dash.has(k)) src.delete(k);
@@ -441,6 +450,56 @@ export function runCheck(check: CheckSpec, ctx: Ctx): CheckResult {
         lines.push(`${mname(ctx, mid)}: dashboard ${fmt(d)} vs source ${fmt(sv)}${same ? '' : ' ✗'}`);
       }
       return ok ? pass(`All ${c.measureIds.length} funnel stages match the source data`, lines.join('; ')) : fail('Funnel stage counts differ from the source data', lines.join('; '));
+    }
+    case 'records': {
+      const c = comp(ctx, check.componentId);
+      if (!c) return { status: 'Blocked', actual: 'Component missing.', evidence: '' };
+      const m = ctx.measures.find((x) => x.id === c.measureIds[0]);
+      if (!m?.datasetId) return { status: 'Blocked', actual: 'The list is not bound to a counted measure.', evidence: '' };
+      const shown = E.records(m.id, f);
+      // independent: raw source rows in the period that meet the measure's conditions
+      const conds = conditionsOf(m);
+      const src = indRows(ctx, m.datasetId, f, current).filter((r) => conds.every((cd) => testCond(cd, r[cd.field])) && (!m.field || (r[m.field] != null && r[m.field] !== '')));
+      const keyCol = m.field ?? ctx.u.profiles.find((p) => p.datasetId === m.datasetId)?.primaryKey;
+      const shownKeys = new Set(shown.map((w) => String(w.v[`${m.datasetId}::${keyCol}`])));
+      const missing = src.filter((r) => !shownKeys.has(String(r[keyCol!])));
+      const unlinked = (c.tableColumns ?? []).filter((x) => lookupChain(ctx, m.datasetId!, splitRef(x).datasetId) == null);
+      const toggled = c.toggle ? E.records(m.id, f, c.toggle.filter) : null;
+      const toggleOk = !toggled || toggled.every((w) => c.toggle!.filter.every((cd) => testCond(cd, w.v[`${m.datasetId}::${cd.field}`])));
+      const ev = `${m.name} = ${m.logic}. Period ${fmtPeriod(current)}: list shows ${shown.length} record(s); source recount ${src.length}.${toggled ? ` "${c.toggle!.label}" narrows it to ${toggled.length}.` : ''}${unlinked.length ? ` Unlinked columns: ${unlinked.map((x) => splitRef(x).column).join(', ')}.` : ''}`;
+      return shown.length === src.length && !missing.length && !unlinked.length && toggleOk ? pass(`All ${shown.length} ${m.name.toLowerCase()} records listed, matching the source`, ev) : fail(`Case list differs from source: ${shown.length} listed vs ${src.length} in source${missing.length ? `, ${missing.length} missing` : ''}`, ev);
+    }
+    case 'extremes': {
+      const c = comp(ctx, check.componentId);
+      if (!c?.dimension) return { status: 'Blocked', actual: 'Component missing.', evidence: '' };
+      const mid = c.measureIds[0];
+      const real = (k: string) => k !== '(Unmatched)' && k !== '(Blank)' && k !== '(n/a)';
+      const pick = (entries: [string, number][]) => {
+        const s = entries.filter(([k]) => real(k)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        return { hi: s[0], lo: s[s.length - 1] };
+      };
+      const dash = pick(E.group(mid, c.dimension, f).map((g) => [g.key, g.value]));
+      const src = pick([...indGroup(ctx, mid, c.dimension, f, current)]);
+      const same = (a?: [string, number], b?: [string, number]) => (!a && !b) || (!!a && !!b && Math.abs(a[1] - b[1]) < EPS);
+      const ev = `${mname(ctx, mid)} by ${splitRef(c.dimension).column} (${fmtPeriod(current)}). Highest: dashboard ${dash.hi?.[0]} ${fmt(dash.hi?.[1])}, source ${src.hi?.[0]} ${fmt(src.hi?.[1])}. Lowest: dashboard ${dash.lo?.[0]} ${fmt(dash.lo?.[1])}, source ${src.lo?.[0]} ${fmt(src.lo?.[1])}.`;
+      return same(dash.hi, src.hi) && same(dash.lo, src.lo) ? pass(`Highest (${dash.hi?.[0]}) and lowest (${dash.lo?.[0]}) match the source`, ev) : fail('Highest / lowest values differ from the source', ev);
+    }
+    case 'catalogue': {
+      const m = ctx.measures.find((x) => x.id === check.measureId);
+      if (!m?.catalogueRef) return { status: 'Blocked', actual: 'Measure is no longer linked to the KPI catalogue.', evidence: '' };
+      const metric = KPI_CATALOGUE.find((x) => x.name === m.catalogueRef);
+      // re-derive the catalogue definition from the data and compare with what the dashboard uses
+      const fresh = bindCatalogue(ctx.u).measures;
+      const ref = fresh.find((x) => x.catalogueRef === m.catalogueRef);
+      const shape = (x: MeasureDef, all: MeasureDef[]): string =>
+        x.kind === 'ratio' ? `ratio(${shape(all.find((y) => y.id === x.numeratorId)!, all)}/${shape(all.find((y) => y.id === x.denominatorId)!, all)})` : `${x.kind}(${x.datasetId}.${x.field ?? '*'})[${conditionsOf(x).map((cd) => `${cd.field}${cd.op}${cd.values.join('|')}`).join('&')}]`;
+      if (!ref) return { status: 'Blocked', actual: 'The catalogue definition can no longer be derived from the data.', evidence: metric?.computation ?? '' };
+      const same = shape(m, ctx.measures) === shape(ref, fresh) || (m.kind === 'count' && ref.kind === 'countDistinct' && shape({ ...m, kind: 'countDistinct' }, ctx.measures) === shape(ref, fresh));
+      const k = E.kpi(m.id, f);
+      const src = indValue(ctx, m.id, f, current);
+      const ok = same && k.current != null && src != null && Math.abs(k.current - src) < EPS;
+      const ev = `ProcDNA KPI Catalogue: ${metric ? `${metric.definition} Computation: ${metric.computation}` : m.catalogueRef}. Dashboard logic: ${m.logic}. Value ${fmt(k.current)} (source ${fmt(src)}).`;
+      return ok ? pass(`${m.name} follows the catalogue definition and reconciles (${fmt(k.current)})`, ev) : fail(same ? `${m.name} does not reconcile: ${fmt(k.current)} vs source ${fmt(src)}` : `${m.name} no longer matches the catalogue definition`, ev);
     }
     case 'rls': {
       const rel = ctx.release;

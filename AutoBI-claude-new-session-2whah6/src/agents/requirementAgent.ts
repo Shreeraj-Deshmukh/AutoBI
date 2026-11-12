@@ -1,5 +1,6 @@
 import type { Clarification, ProjectInfo, ReqItem, RequirementSection, RequirementSpec } from '@/types';
 import { uid, humanize, singular } from '@/lib/util';
+import { FRM_REQUIREMENT_KPIS } from '@/lib/catalogue';
 
 /**
  * Requirement Intelligence Agent (deterministic NLP).
@@ -153,12 +154,38 @@ export function extractRequirements(text: string, info: Partial<ProjectInfo>): R
     add('visuals', 'Table – HCPs with unresolved access issues');
   }
 
+  // ── FRM case management: KPIs, pages and visuals from the ProcDNA KPI catalogue / FRM report
+  const frmCases = /\bFRMs?\b|field reimbursement/i.test(t) && /\bcases?\b/i.test(t);
+  if (frmCases) {
+    for (const k of FRM_REQUIREMENT_KPIS) add('kpis', k, 'catalogue');
+    for (const d of ['Case type', 'Priority', 'Region', 'FRM']) add('dimensions', d);
+    add('rules', 'Case KPIs follow the ProcDNA KPI Catalogue (Case and FRM Management) definitions');
+    add('rules', 'Case closure rate = closed cases ÷ cases opened in the period');
+    add('rules', 'Open cases are aged from case open date into 0-7, 8-14, 15-21, 22-30 and 30+ day buckets; the case SLA is 14 days');
+    add('rules', 'Time to first fill = days from referral to therapy start');
+    add('visuals', 'Case summary cards – total / open / closed / closure rate, time to resolution (average and median), time to first fill');
+    add('visuals', 'Table – priority prescribers by pending cases with priority flags');
+    add('visuals', 'Bar chart – open case aging buckets');
+    add('visuals', 'Case list – open and escalated cases with patient, HCP, payer, case type, priority and days open');
+    add('visuals', 'Territory scorecard – highest and lowest territory for volume, closure rate, resolution time, open and escalated cases');
+    add('visuals', 'Decomposition tree – case journey by region, territory, case type and status');
+    add('datasets', 'FRM case log (one row per access case, with case type, status, priority, escalation and open / first action / close dates)');
+  }
+
   // ── user stories
   const persona = /\bFRMs?\b|field reimbursement/i.test(t) ? 'field reimbursement manager' : info.audience?.trim() ? info.audience.trim().toLowerCase() : 'business user';
+  if (frmCases) {
+    add('stories', 'As a field reimbursement manager, I want to see each open case with the patient, HCP, payer and where the patient is stuck so that I know which office to call first');
+    add('stories', 'As an FRM manager, I want to compare territories on case volume, closure rate and response time so that I can see where intervention is needed');
+  }
   for (const o of spec.objectives.slice(0, 6)) add('stories', `As a ${persona}, I want to ${o.text.charAt(0).toLowerCase()}${o.text.slice(1)} so that I can act on it quickly`);
   if (spec.filters.length) add('stories', `As a ${persona}, I want to filter by ${spec.filters.map((f) => f.text.toLowerCase()).join(', ')} so that I only see what is relevant to me`);
 
   // ── pages
+  if (frmCases) {
+    add('pages', 'Field Reimbursement Management');
+    add('pages', 'FRM Performance');
+  }
   add('pages', 'Executive Overview');
   for (const h of hits) {
     if (h.entity === 'call') add('pages', 'Call Analytics');

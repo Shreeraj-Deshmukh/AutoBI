@@ -17,7 +17,7 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
         v(false, missing.length ? `KPI definition(s) no longer exist in the reporting foundation.` : 'No measure bound to this component.');
         continue;
       }
-      const excluded = [c.dimension, c.series, ...(c.tableColumns ?? [])].filter((x): x is string => !!x && !fieldIncluded(foundation, x));
+      const excluded = [...new Set([c.dimension, c.series, ...(c.tableColumns ?? []), ...(c.levels ?? [])])].filter((x): x is string => !!x && !fieldIncluded(foundation, x));
       if (excluded.length) {
         v(false, `Uses ${excluded.map((x) => fieldLabel(foundation, x)).join(', ')}, which is excluded in Field Mapping. Include the field or change the visual.`);
         continue;
@@ -35,8 +35,35 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
           continue;
         }
       }
+      // fields shown beside the measure (case list columns, drilldown levels) must be reachable from its data
+      const extra = [...(c.levels ?? []), ...(c.type === 'records' ? c.tableColumns ?? [] : [])];
+      const lost = extra.filter((x) => !engine.profile(splitRef(x).datasetId)?.columns.some((col) => col.name === splitRef(x).column) || !engine.applies(c.measureIds[0], x));
+      if (lost.length) {
+        v(false, `${lost.map((x) => fieldLabel(foundation, x)).join(', ')} cannot be linked to ${engine.measures.get(c.measureIds[0])!.name}.`);
+        continue;
+      }
       try {
-        if (c.type === 'kpi') {
+        if (c.type === 'kpiGroup') {
+          if (c.dimension) {
+            const g = engine.group(c.measureIds[0], c.dimension, f);
+            v(g.length > 0, g.length ? `${g.length} values: ${g.map((x) => x.key).join(', ')}.` : 'No data for the default period.');
+          } else {
+            const vals = c.measureIds.map((m) => engine.kpi(m, f).current);
+            v(vals.every((x) => x != null), `${vals.length} values: ${vals.map((x) => (x == null ? 'n/a' : x.toFixed(1))).join(' · ')}.`);
+          }
+        } else if (c.type === 'extremes') {
+          const g = engine.group(c.measureIds[0], c.dimension!, f);
+          v(g.length > 0, g.length ? `${g.length} ${fieldLabel(foundation, c.dimension!).toLowerCase()} values compared.` : 'No data for the default period.');
+        } else if (c.type === 'records') {
+          const rows = engine.records(c.measureIds[0], f);
+          v(true, `${rows.length} record(s) × ${(c.tableColumns ?? []).length} columns.`);
+        } else if (c.type === 'scatter') {
+          const ok = c.measureIds.length >= 2 && c.measureIds.every((m) => engine.group(m, c.dimension!, f).length > 0);
+          v(ok, ok ? `${engine.group(c.measureIds[0], c.dimension!, f).length} points.` : 'A scatter plot needs two measures with data by the category.');
+        } else if (c.type === 'drilldown') {
+          const g = engine.group(c.measureIds[0], (c.levels ?? [c.dimension!])[0], f);
+          v(g.length > 0, `${(c.levels ?? []).length} levels; ${g.length} values at the top level.`);
+        } else if (c.type === 'kpi') {
           const k = engine.kpi(c.measureIds[0], f);
           v(k.current != null, k.current == null ? 'Measure returned no value (division by zero or no rows).' : `Value ${k.current.toFixed(2)} computed from source rows.`);
         } else if (c.type === 'funnel') {

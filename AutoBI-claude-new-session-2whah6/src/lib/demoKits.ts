@@ -9,8 +9,8 @@ export const DEMO_KITS = [
     domain: 'Rare disease patient access / field reimbursement',
     client: 'Sanofi – Rare Blood Disorders, Patient Support Services',
     narrative: ACCESS_NARRATIVE,
-    files: ['sp_patient_journey.csv', 'payer_plan_pbm.csv', 'hcp_frm_alignment.xlsx'],
-    note: '~885 SP patient cases, 35 plans across payers & PBMs, 150 HCPs, 12 FRM territories · CSV + Excel (2 sheets)',
+    files: ['sp_patient_journey.csv', 'payer_plan_pbm.csv', 'hcp_frm_alignment.xlsx', 'frm_cases.csv'],
+    note: '~885 SP patients, ~810 FRM access cases, 35 plans across payers & PBMs, 150 HCPs, 12 FRM territories · CSV + Excel (2 sheets)',
   },
   {
     id: 'brand',

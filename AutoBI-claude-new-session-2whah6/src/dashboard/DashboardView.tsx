@@ -1,9 +1,10 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, Minus, Download, Search, ChevronDown, X, RotateCcw, ArrowUpDown, Layers, Maximize2, Info } from 'lucide-react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend, ScatterChart, Scatter, LabelList } from 'recharts';
+import { ArrowDownRight, ArrowUpRight, Minus, Download, Search, ChevronDown, X, RotateCcw, ArrowUpDown, Layers, Maximize2, Info, Flag, ChevronRight } from 'lucide-react';
 import type { DashComponent, DashboardSpec, FieldRef, Foundation, PeriodPreset } from '@/types';
-import { Engine, type FilterState, display } from '@/lib/engine';
-import { PERIOD_LABELS, bucketLabel, bucketRange, fmtPeriod } from '@/lib/dates';
+import { Engine, type FilterState, type WideRow, display, splitRef, BLANK, UNMATCHED } from '@/lib/engine';
+import { PERIOD_LABELS, bucketLabel, bucketRange, fmtPeriod, parseDate } from '@/lib/dates';
+import { CARD_TYPES, cardWeight } from '@/agents/designAgent';
 import { cx, Modal } from '@/components/ui';
 import { download, toCsv } from '@/lib/util';
 import { PALETTE, fmtMeasure } from './format';
@@ -44,7 +45,7 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
   const ctx: Ctx = { engine, f: eff, foundation, spec, toggle, hierarchy, drillTo };
   const active = Object.entries(f.selections).filter(([k, v]) => v.length && k !== locked?.field);
 
-  // group consecutive KPI cards into rows
+  // group consecutive cards (KPI, KPI group, highest/lowest) into rows
   const blocks: (DashComponent | DashComponent[])[] = [];
   const sectionStart = new Map<string, string>(); // first component id of each section → heading
   let prevSection: string | undefined;
@@ -53,8 +54,9 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
     const newSection = c.section && c.section !== prevSection;
     if (newSection) sectionStart.set(c.id, c.section!);
     prevSection = c.section ?? prevSection;
-    if (c.type === 'kpi' && Array.isArray(last) && !newSection) last.push(c);
-    else blocks.push(c.type === 'kpi' ? [c] : c);
+    const card = CARD_TYPES.includes(c.type);
+    if (card && Array.isArray(last) && !newSection) last.push(c);
+    else blocks.push(card ? [c] : c);
   }
   const heading = (c: DashComponent) => sectionStart.get(c.id);
 
@@ -100,8 +102,12 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
             <Fragment key={first.id + i}>
               {h && <h3 className="col-span-12 mt-2 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-navy-800 first:mt-0" data-testid="section-heading">{h}<span className="h-px flex-1 bg-slate-300/70" /></h3>}
               {Array.isArray(b) ? (
-                <div className="col-span-12 grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(170px, 1fr))` }}>
-                  {b.map((c) => <KpiCard key={c.id} c={c} ctx={ctx} />)}
+                <div className="col-span-12 flex flex-wrap gap-3">
+                  {b.map((c) => (
+                    <div key={c.id} className="flex min-w-0" style={{ flex: `${cardWeight(c)} 1 ${cardWeight(c) * 150 + 20}px` }}>
+                      {c.type === 'kpiGroup' ? <KpiGroupCard c={c} ctx={ctx} /> : c.type === 'extremes' ? <ExtremesCard c={c} ctx={ctx} /> : <KpiCard c={c} ctx={ctx} />}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className={cx('col-span-12', b.width === 12 ? '' : b.width === 8 ? 'xl:col-span-8' : b.width === 4 ? 'lg:col-span-6 xl:col-span-4' : b.width === 3 ? 'md:col-span-6 xl:col-span-3' : 'lg:col-span-6')}>
@@ -205,7 +211,7 @@ function KpiCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   const series = useMemo(() => (m && ctx.engine.profile(m.datasetId ?? '')?.dateField ? ctx.engine.series(m.id, ctx.spec.timeGrain, ctx.f) : m?.kind === 'ratio' ? ctx.engine.series(m.id, ctx.spec.timeGrain, ctx.f) : []), [m, ctx.engine, ctx.f, ctx.spec.timeGrain]);
   return (
     <>
-      <button onClick={() => setOpen(true)} className="group flex flex-col rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-brand-300 hover:shadow-sm" data-testid="kpi" data-title={c.title} title="Click for trend drill-down">
+      <button onClick={() => setOpen(true)} className="group flex w-full flex-col rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-brand-300 hover:shadow-sm" data-testid="kpi" data-title={c.title} title="Click for trend drill-down">
         <div className="flex items-center justify-between text-[0.6875rem] font-medium uppercase tracking-wide text-slate-500">{c.title}<Maximize2 className="h-3 w-3 opacity-0 group-hover:opacity-100" /></div>
         <div className="mt-1 text-2xl font-semibold tabular-nums text-navy-900" data-testid="kpi-value">{fmtMeasure(k.current, m)}</div>
         {showCmp ? (
@@ -244,7 +250,76 @@ function KpiCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
 
 const exportRows = (title: string, rows: Record<string, unknown>[]) => download(`${title.replace(/[^\w]+/g, '_')}.csv`, toCsv(rows), 'text/csv');
 
+/** One card, several values: either a set of measures (Total / Open / Closed …) or one measure per category. */
+function KpiGroupCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  const { current } = ctx.engine.resolve(ctx.f);
+  const ms = c.measureIds.map((id) => ctx.foundation.measures.find((x) => x.id === id));
+  const selected = c.dimension ? ctx.f.selections[c.dimension] ?? [] : [];
+  const items = c.dimension
+    ? ctx.engine.group(c.measureIds[0], c.dimension, ctx.f).filter((g) => g.key !== UNMATCHED).map((g) => ({ label: g.key, value: g.value as number | null, m: ms[0], key: g.key }))
+    : c.measureIds.map((id, i) => ({ label: c.labels?.[i] ?? ms[i]?.name ?? '', value: ctx.engine.value(id, ctx.f, current), m: ms[i], key: undefined as string | undefined }));
+  return (
+    <div className="flex w-full flex-col rounded-xl border border-slate-200 bg-white px-4 py-3" data-testid="kpi-group" data-title={c.title} title={c.description}>
+      <div className="text-[0.75rem] font-semibold text-navy-900">{c.title}</div>
+      <div className="mt-2 grid flex-1 items-end divide-x divide-slate-200" style={{ gridTemplateColumns: `repeat(${Math.max(1, items.length)}, minmax(0, 1fr))` }}>
+        {items.map((it) => {
+          const body = (
+            <>
+              <div className="truncate text-[0.6875rem] text-slate-500" title={it.label}>{it.label}</div>
+              <div className="text-xl font-semibold tabular-nums text-navy-900" data-testid="kpi-value" title={it.m?.logic}>{fmtMeasure(it.value, it.m)}</div>
+            </>
+          );
+          return it.key != null ? (
+            <button key={it.label} onClick={() => ctx.toggle(c.dimension!, it.key!)} className={cx('min-w-0 rounded px-2 text-center hover:bg-brand-50', selected.length && !selected.includes(it.key) && 'opacity-40')}>{body}</button>
+          ) : <div key={it.label} className="min-w-0 px-2 text-center">{body}</div>;
+        })}
+        {!items.length && <div className="text-xs text-slate-400">No data</div>}
+      </div>
+    </div>
+  );
+}
+
+/** Highest and lowest category for a measure (territory scorecard). */
+function ExtremesCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  const m = ctx.foundation.measures.find((x) => x.id === c.measureIds[0]);
+  const g = ctx.engine.group(c.measureIds[0], c.dimension!, ctx.f).filter((x) => x.key !== UNMATCHED && x.key !== BLANK).sort((a, b) => b.value - a.value || a.key.localeCompare(b.key));
+  const hi = g[0];
+  const lo = g[g.length - 1];
+  const cell = (head: string, name?: string, value?: string) => (
+    <div className="min-w-0 px-2 text-center first:pl-0">
+      <div className="text-[0.6875rem] text-slate-500">{head}</div>
+      <button className="mt-0.5 block w-full truncate text-xs font-semibold text-navy-900 hover:text-brand-700" title={name} onClick={() => name && ctx.toggle(c.dimension!, name)}>{name ?? '—'}</button>
+      {value != null && <div className="text-base font-semibold tabular-nums text-navy-900">{value}</div>}
+    </div>
+  );
+  let attr: string | undefined;
+  if (c.topOnly && hi) attr = display(ctx.engine.table(c.dimension!, [c.measureIds[0]], [c.topOnly], ctx.f).find((r) => r.__key === hi.key)?.[c.topOnly] ?? null);
+  return (
+    <div className="flex w-full flex-col rounded-xl border border-slate-200 bg-white px-4 py-3" data-testid="extremes" data-title={c.title}>
+      <div className="text-[0.75rem] font-semibold text-navy-900" title={m?.logic}>{c.title}</div>
+      <div className="mt-2 grid flex-1 grid-cols-2 items-end divide-x divide-slate-200">
+        {c.topOnly ? (
+          <>
+            {cell(fieldLabel(ctx.foundation, c.dimension!), hi?.key, hi ? fmtMeasure(hi.value, m) : undefined)}
+            <div className="min-w-0 px-2 text-center"><div className="text-[0.6875rem] text-slate-500">{fieldLabel(ctx.foundation, c.topOnly)}</div><div className="mt-0.5 truncate text-xs font-semibold text-navy-900" title={attr}>{attr ?? '—'}</div></div>
+          </>
+        ) : (
+          <>
+            {cell(c.lowIsBest ? 'Fastest' : 'Highest', (c.lowIsBest ? lo : hi)?.key, fmtMeasure((c.lowIsBest ? lo : hi)?.value, m))}
+            {cell(c.lowIsBest ? 'Slowest' : 'Lowest', (c.lowIsBest ? hi : lo)?.key, fmtMeasure((c.lowIsBest ? hi : lo)?.value, m))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Visual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  if (c.type === 'records') return <RecordsVisual c={c} ctx={ctx} />;
+  if (c.type === 'scatter') return <ScatterVisual c={c} ctx={ctx} />;
+  if (c.type === 'drilldown') return <DrilldownVisual c={c} ctx={ctx} />;
+  if (c.type === 'kpiGroup') return <KpiGroupCard c={c} ctx={ctx} />;
+  if (c.type === 'extremes') return <ExtremesCard c={c} ctx={ctx} />;
   if (c.type === 'table') return <TableVisual c={c} ctx={ctx} />;
   if (c.type === 'line' || c.type === 'area') return <LineVisual c={c} ctx={ctx} />;
   if (c.type === 'stacked') return <StackedVisual c={c} ctx={ctx} />;
@@ -401,10 +476,14 @@ function TableVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
       return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''))) * sort.dir;
     });
   const totals = Object.fromEntries(ms.map((m) => [m.id, m.kind === 'count' || m.kind === 'sum' ? filtered.reduce((s, r) => s + ((r[m.id] as number) ?? 0), 0) : null]));
+  // priority flags: explicit thresholds, or the top 10% (two flags) and next 25% (one flag) of the rows in view
+  const ranked = rows.map((r) => Number(r[c.measureIds[0]] ?? 0)).filter((x) => x > 0).sort((a, b) => b - a);
+  const at = (q: number) => ranked[Math.min(ranked.length - 1, Math.floor(ranked.length * q))] ?? Infinity;
+  const flagAt = { high: c.flags?.high ?? Math.max(2, at(0.1)), medium: c.flags?.medium ?? Math.max(1, at(0.35)) };
   const dimLabel = fieldLabel(ctx.foundation, c.dimension!);
   const selected = ctx.f.selections[c.dimension!] ?? [];
   const head = (key: string, label: string, right = false) => (
-    <th className={cx('th cursor-pointer select-none hover:text-slate-800', right && 'text-right')} onClick={() => setSort({ key, dir: sort.key === key ? (sort.dir === 1 ? -1 : 1) : -1 })}>
+    <th key={key} className={cx('th cursor-pointer select-none hover:text-slate-800', right && 'text-right')} onClick={() => setSort({ key, dir: sort.key === key ? (sort.dir === 1 ? -1 : 1) : -1 })}>
       <span className="inline-flex items-center gap-1">{label}<ArrowUpDown className={cx('h-3 w-3', sort.key === key ? 'text-brand-600' : 'text-slate-300')} /></span>
     </th>
   );
@@ -427,22 +506,29 @@ function TableVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
               {head('__key', dimLabel)}
               {attrs.map((a) => head(a, fieldLabel(ctx.foundation, a)))}
               {ms.map((m) => head(m.id, m.name, true))}
+              {c.flags && <th className="th text-center">Priority Flag</th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.slice(0, limit).map((r) => (
-              <tr key={String(r.__key)} onClick={() => ctx.toggle(c.dimension!, String(r.__key))} className={cx('cursor-pointer hover:bg-brand-50/50', selected.includes(String(r.__key)) && 'bg-brand-50')}>
-                <td className="td font-medium text-navy-900">{String(r.__key)}</td>
-                {attrs.map((a) => <td key={a} className="td text-xs">{display(r[a] ?? null)}</td>)}
-                {ms.map((m) => <td key={m.id} className="td text-right tabular-nums">{fmtMeasure(r[m.id] as number, m)}</td>)}
-              </tr>
-            ))}
+            {filtered.slice(0, limit).map((r) => {
+              const v = Number(r[c.measureIds[0]] ?? 0);
+              const flags = c.flags && v > 0 ? (v >= flagAt.high ? 2 : v >= flagAt.medium ? 1 : 0) : 0;
+              return (
+                <tr key={String(r.__key)} onClick={() => ctx.toggle(c.dimension!, String(r.__key))} className={cx('cursor-pointer hover:bg-brand-50/50', selected.includes(String(r.__key)) && 'bg-brand-50')}>
+                  <td className="td font-medium text-navy-900">{String(r.__key)}</td>
+                  {attrs.map((a) => <td key={a} className="td text-xs">{display(r[a] ?? null)}</td>)}
+                  {ms.map((m) => <td key={m.id} className="td text-right tabular-nums">{fmtMeasure(r[m.id] as number, m)}</td>)}
+                  {c.flags && <td className="td text-center" aria-label={`${flags} priority flag(s)`}>{Array.from({ length: flags }, (_, i) => <Flag key={i} className="inline h-3.5 w-3.5 fill-amber-400 text-amber-500" />)}</td>}
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot className="sticky bottom-0 bg-slate-50">
             <tr>
               <td className="td font-semibold">Total ({filtered.length} rows)</td>
               {attrs.map((a) => <td key={a} className="td" />)}
               {ms.map((m) => <td key={m.id} className="td text-right font-semibold tabular-nums">{totals[m.id] == null ? '' : fmtMeasure(totals[m.id], m)}</td>)}
+              {c.flags && <td className="td" />}
             </tr>
           </tfoot>
         </table>
@@ -478,5 +564,196 @@ function FunnelVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
 
 function NoData() {
   return <div className="flex h-full items-center justify-center text-xs text-slate-400">No data for the current filters</div>;
+}
+
+/** Record-level cell: empty values read as a dash in a case list, not as a "(Blank)" category. */
+const cellText = (v: WideRow['v'][string] | undefined) => (v == null || v === '' ? '—' : display(v));
+
+/** Row-level list of the records behind a measure (e.g. every open case), with an optional narrowing toggle and a detail view. */
+function RecordsVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  const cols = c.tableColumns ?? [];
+  const [narrow, setNarrow] = useState(false);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<{ key: FieldRef; dir: 1 | -1 }>({ key: c.sortBy ?? cols[0], dir: -1 });
+  const [limit, setLimit] = useState(15);
+  const [open, setOpen] = useState<WideRow | null>(null);
+  const all = ctx.engine.records(c.measureIds[0], ctx.f);
+  const toggled = c.toggle ? ctx.engine.records(c.measureIds[0], ctx.f, c.toggle.filter) : [];
+  const rows = (narrow && c.toggle ? toggled : all)
+    .filter((w) => !q || cols.some((k) => String(w.v[k] ?? '').toLowerCase().includes(q.toLowerCase())))
+    .sort((a, b) => {
+      const x = a.v[sort.key];
+      const y = b.v[sort.key];
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''))) * sort.dir;
+    });
+  const label = (k: FieldRef) => fieldLabel(ctx.foundation, k);
+  return (
+    <Frame
+      c={c}
+      ctx={ctx}
+      onExport={() => exportRows(c.title, rows.map((w) => Object.fromEntries(cols.map((k) => [label(k), w.v[k]]))))}
+      actions={
+        <div className="flex items-center gap-2">
+          {c.toggle && (
+            <div className="flex items-center rounded-lg border border-slate-200 p-0.5 text-[0.6875rem]" role="group" aria-label="Case list view">
+              <button className={cx('rounded-md px-2 py-0.5', !narrow ? 'bg-navy-800 text-white' : 'text-slate-600')} onClick={() => setNarrow(false)}>All ({all.length})</button>
+              <button className={cx('rounded-md px-2 py-0.5', narrow ? 'bg-navy-800 text-white' : 'text-slate-600')} onClick={() => setNarrow(true)} data-testid="records-toggle">{c.toggle.label} ({toggled.length})</button>
+            </div>
+          )}
+          <div className="relative">
+            <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-slate-400" />
+            <input className="input w-44 py-1 pl-7 text-xs" placeholder="Search cases…" value={q} onChange={(e) => setQ(e.target.value)} aria-label={`Search ${c.title}`} />
+          </div>
+        </div>
+      }
+    >
+      <div className="max-h-[26.25rem] overflow-auto">
+        <table className="w-full" data-testid="records-table">
+          <thead className="sticky top-0 z-10">
+            <tr>
+              {cols.map((k) => (
+                <th key={k} className="th cursor-pointer select-none whitespace-nowrap hover:text-slate-800" onClick={() => setSort({ key: k, dir: sort.key === k ? (sort.dir === 1 ? -1 : 1) : -1 })}>
+                  <span className="inline-flex items-center gap-1">{label(k)}<ArrowUpDown className={cx('h-3 w-3', sort.key === k ? 'text-brand-600' : 'text-slate-300')} /></span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, limit).map((w, i) => (
+              <tr key={String(w.v[cols[0]]) + i} onClick={() => setOpen(w)} className="cursor-pointer hover:bg-brand-50/50" title="Open case detail">
+                {cols.map((k, j) => <td key={k} className={cx('td text-xs', j === 0 && 'font-medium text-navy-900', /details?|issue/i.test(k) && 'min-w-[14rem]')}>{cellText(w.v[k])}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!rows.length && <div className="py-8"><NoData /></div>}
+        {rows.length > limit && <button className="w-full py-2 text-xs font-medium text-brand-700 hover:bg-slate-50" onClick={() => setLimit(limit + 25)}>Show more ({rows.length - limit} remaining)</button>}
+      </div>
+      {open && <RecordDetail w={open} cols={cols} ctx={ctx} onClose={() => setOpen(null)} />}
+    </Frame>
+  );
+}
+
+/** Case detail: the record's attributes and the patient journey as a dated timeline (every date reachable from the record). */
+function RecordDetail({ w, cols, ctx, onClose }: { w: WideRow; cols: FieldRef[]; ctx: Ctx; onClose: () => void }) {
+  const label = (k: FieldRef) => fieldLabel(ctx.foundation, k);
+  const dsLabel = (k: FieldRef) => ctx.engine.profile(splitRef(k).datasetId)?.label ?? '';
+  const events = ctx.engine.profiles
+    .flatMap((p) => p.columns.filter((col) => col.type === 'date').map((col) => `${p.datasetId}::${col.name}`))
+    .map((k) => ({ k, t: parseDate(w.v[k] as string)?.t, v: w.v[k] }))
+    .filter((e): e is { k: FieldRef; t: number; v: string } => e.t != null)
+    .sort((a, b) => a.t - b.t);
+  const stuck = Object.keys(w.v).find((k) => /::current_?stage$/i.test(k));
+  const daysIn = Object.keys(w.v).find((k) => /::days_in_current_stage$/i.test(k));
+  return (
+    <Modal open onClose={onClose} title={`${label(cols[0])} ${display(w.v[cols[0]] ?? null)}`} wide>
+      {stuck && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <b>Where the patient is now:</b> {display(w.v[stuck] ?? null)}
+          {daysIn && w.v[daysIn] != null && <span className="text-amber-700">· {String(w.v[daysIn])} days in this stage</span>}
+        </div>
+      )}
+      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div>
+          <div className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-500">Journey timeline</div>
+          <ol className="relative space-y-3 border-l-2 border-brand-100 pl-4" data-testid="journey-timeline">
+            {events.map((e) => (
+              <li key={e.k} className="relative">
+                <span className="absolute -left-[1.3rem] top-1 h-2.5 w-2.5 rounded-full bg-brand-500" />
+                <div className="text-xs font-medium text-navy-900">{label(e.k)}</div>
+                <div className="text-[0.6875rem] text-slate-500">{String(e.v)} · {dsLabel(e.k)}</div>
+              </li>
+            ))}
+            {!events.length && <li className="text-xs text-slate-400">No dated events.</li>}
+          </ol>
+        </div>
+        <div>
+          <div className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-500">Case details</div>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+            {cols.map((k) => (
+              <Fragment key={k}>
+                <dt className="text-slate-500">{label(k)}</dt>
+                <dd className="font-medium text-slate-800">{cellText(w.v[k])}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Two measures per category, e.g. FRM response time (x) against case volume (y) by territory. */
+function ScatterVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  const [mx, my] = c.measureIds.map((id) => ctx.foundation.measures.find((x) => x.id === id));
+  const ys = new Map(ctx.engine.group(c.measureIds[1], c.dimension!, ctx.f).map((g) => [g.key, g.value]));
+  const pts = ctx.engine.group(c.measureIds[0], c.dimension!, ctx.f).filter((g) => ys.has(g.key) && g.key !== UNMATCHED).map((g) => ({ name: g.key, x: g.value, y: ys.get(g.key)! }));
+  const selected = ctx.f.selections[c.dimension!] ?? [];
+  return (
+    <Frame c={c} ctx={ctx} onExport={() => exportRows(c.title, pts.map((p) => ({ [fieldLabel(ctx.foundation, c.dimension!)]: p.name, [mx?.name ?? 'x']: p.x, [my?.name ?? 'y']: p.y })))}>
+      <div className="h-72">
+        {!pts.length ? <NoData /> : (
+          <ResponsiveContainer>
+            <ScatterChart margin={{ top: 12, right: 24, bottom: 18, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis type="number" dataKey="x" name={mx?.name} tick={{ fontSize: 10 }} label={{ value: mx?.name, position: 'insideBottom', offset: -10, fontSize: 10 }} domain={['auto', 'auto']} />
+              <YAxis type="number" dataKey="y" name={my?.name} tick={{ fontSize: 10 }} width={44} domain={['auto', 'auto']} />
+              <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v: number, n: string) => fmtMeasure(v, n === mx?.name ? mx : my)} labelFormatter={() => ''} />
+              <Scatter isAnimationActive={false} data={pts} onClick={(d: { name?: string }) => d.name && ctx.toggle(c.dimension!, d.name)} cursor="pointer">
+                {pts.map((p) => <Cell key={p.name} fill={selected.length && !selected.includes(p.name) ? '#cbd5e1' : PALETTE[0]} />)}
+                <LabelList dataKey="name" position="top" style={{ fontSize: 9, fill: '#475569' }} />
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </Frame>
+  );
+}
+
+/** Decomposition tree: one column per level; clicking a bar opens the next level for that node. */
+function DrilldownVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  const levels = c.levels ?? (c.dimension ? [c.dimension] : []);
+  const [path, setPath] = useState<string[]>([]);
+  const m = ctx.foundation.measures.find((x) => x.id === c.measureIds[0]);
+  const { current } = ctx.engine.resolve(ctx.f);
+  const total = ctx.engine.value(c.measureIds[0], ctx.f, current);
+  const columns = levels.slice(0, path.length + 1).map((lvl, i) => {
+    const sel = Object.fromEntries(path.slice(0, i).map((v, j) => [levels[j], [v]]));
+    const f: FilterState = { ...ctx.f, selections: { ...ctx.f.selections, ...sel } };
+    return { lvl, rows: ctx.engine.group(c.measureIds[0], lvl, f).filter((g) => g.value) };
+  });
+  const click = (i: number, key: string) => setPath(path[i] === key ? path.slice(0, i) : [...path.slice(0, i), key]);
+  return (
+    <Frame c={c} ctx={ctx} actions={path.length ? <button className="rounded px-1.5 py-0.5 text-[0.625rem] text-slate-500 hover:bg-slate-100" onClick={() => setPath([])}>Collapse</button> : undefined}>
+      <div className="flex gap-2 overflow-x-auto px-2 pb-2 pt-1" data-testid="drilldown">
+        <div className="w-40 shrink-0">
+          <div className="mb-1.5 truncate text-[0.6875rem] font-semibold text-slate-500">{m?.name}</div>
+          <div className="rounded-md bg-navy-800 px-2 py-2 text-white"><div className="text-[0.6875rem] opacity-80">Total</div><div className="text-lg font-semibold tabular-nums">{fmtMeasure(total, m)}</div></div>
+        </div>
+        {columns.map(({ lvl, rows }, i) => {
+          const top = Math.max(1, ...rows.map((r) => r.value));
+          return (
+            <div key={lvl} className="flex w-52 shrink-0 gap-1">
+              <ChevronRight className="mt-6 h-4 w-4 shrink-0 text-slate-300" />
+              <div className="min-w-0 flex-1">
+                <div className="mb-1.5 truncate text-[0.6875rem] font-semibold text-slate-500">{fieldLabel(ctx.foundation, lvl)}{path[i - 1] ? <span className="font-normal"> · {path[i - 1]}</span> : null}</div>
+                <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {rows.map((r) => (
+                    <button key={r.key} onClick={() => i < levels.length - 1 && click(i, r.key)} className={cx('block w-full rounded px-1 py-0.5 text-left', i < levels.length - 1 ? 'hover:bg-slate-50' : 'cursor-default', path[i] === r.key && 'bg-brand-50 ring-1 ring-brand-200')} data-testid="drill-node">
+                      <div className="flex justify-between gap-2 text-[0.6875rem]"><span className="truncate text-slate-700">{r.key}</span><span className="tabular-nums text-slate-500">{fmtMeasure(r.value, m)}</span></div>
+                      <div className="mt-0.5 h-2 rounded-sm bg-slate-100"><div className="h-full rounded-sm" style={{ width: `${(r.value / top) * 100}%`, background: path[i] === r.key ? PALETTE[0] : '#93b4fd' }} /></div>
+                    </button>
+                  ))}
+                  {!rows.length && <div className="text-[0.6875rem] text-slate-400">No data</div>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {path.length < levels.length - 1 && <div className="px-4 pb-1 text-[0.625rem] text-slate-400">Click a bar to open {fieldLabel(ctx.foundation, levels[path.length + 1])}.</div>}
+    </Frame>
+  );
 }
 

@@ -1,4 +1,4 @@
-import type { Cell, DatasetProfile, FieldRef, MeasureDef, PeriodPreset, Relationship, Row, TimeGrain } from '@/types';
+import type { Cell, DatasetProfile, FieldRef, MeasureCondition, MeasureDef, PeriodPreset, Relationship, Row, TimeGrain } from '@/types';
 import { bucketOf, parseDate, previousPeriod, resolvePeriod, type Period } from './dates';
 import { conditionsOf, test as testCond } from './conditions';
 import { rowsVersion } from './rowStore';
@@ -25,7 +25,7 @@ export interface FilterState {
   selections: Record<FieldRef, string[]>;
 }
 
-interface WideRow {
+export interface WideRow {
   v: Record<FieldRef, Cell>;
   t: number | null;
 }
@@ -179,9 +179,22 @@ export class Engine {
         const ns = rs.map((w) => w.v[fr!]).filter((x): x is number => typeof x === 'number');
         return ns.length ? ns.reduce((s, x) => s + x, 0) / ns.length : 0;
       }
+      case 'median':
+        return median(rs.map((w) => w.v[fr!]).filter((x): x is number => typeof x === 'number'));
       default:
         return 0;
     }
+  }
+
+  /** The source records behind a measure (its rows after filters and the measure's own conditions), plus optional extra conditions. */
+  records(mid: string, f: FilterState, extra: MeasureCondition[] = []): WideRow[] {
+    const m = this.measures.get(mid);
+    if (!m?.datasetId || !this.profile(m.datasetId)) return [];
+    const ds = m.datasetId;
+    const { current } = this.resolve(f);
+    const conds = [...conditionsOf(m), ...extra];
+    const key = m.field ? ref(ds, m.field) : null;
+    return this.filtered(ds, f, current).filter((w) => (!key || (w.v[key] != null && w.v[key] !== '')) && conds.every((c) => testCond(c, w.v[ref(ds, c.field)])));
   }
 
   value(mid: string, f: FilterState, period: Period | null): number | null {
@@ -231,7 +244,8 @@ export class Engine {
     if (!m) return [];
     const { current } = this.resolve(f);
     const th = opts.threshold;
-    const arr = [...this.groupRaw(m, dim, f, current).entries()].map(([key, value]) => ({ key, value })).filter((g) => !th || (th.op === 'gt' ? g.value > th.value : g.value >= th.value));
+    // a "(Blank)" category with nothing in it is only rows the measure's conditions excluded (e.g. closed cases have no aging bucket)
+    const arr = [...this.groupRaw(m, dim, f, current).entries()].map(([key, value]) => ({ key, value })).filter((g) => !(g.key === BLANK && !g.value) && (!th || (th.op === 'gt' ? g.value > th.value : g.value >= th.value)));
     const ordered = isOrdinal(arr.map((a) => a.key)) ? arr.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })) : arr.sort((a, b) => b.value - a.value);
     return opts.topN ? ordered.slice(0, opts.topN) : ordered;
   }
@@ -333,9 +347,17 @@ export function display(v: Cell | undefined): string {
   return String(v);
 }
 
+export function median(ns: number[]): number {
+  if (!ns.length) return 0;
+  const s = [...ns].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
 function isOrdinal(keys: string[]) {
   const real = keys.filter((k) => k !== BLANK && k !== UNMATCHED);
-  return real.length > 0 && (real.every((k) => /^(tier|level|grade|q|wave|phase|band|decile)\s*\d/i.test(k) || /^\d{4}-/.test(k)) || real.every((k) => /^-?\d+(\.\d+)?$/.test(k)));
+  // tiers / dates / plain numbers, and numeric buckets such as "0-7 days", "8-14 days", "30+ days"
+  return real.length > 0 && (real.every((k) => /^(tier|level|grade|q|wave|phase|band|decile)\s*\d/i.test(k) || /^\d{4}-/.test(k)) || real.every((k) => /^-?\d+(\.\d+)?$/.test(k)) || real.every((k) => /^\d+\s*(?:[-–]\s*\d+|\+)/.test(k)));
 }
 
 export const emptyFilters = (period: PeriodPreset = 'all'): FilterState => ({ period, selections: {} });

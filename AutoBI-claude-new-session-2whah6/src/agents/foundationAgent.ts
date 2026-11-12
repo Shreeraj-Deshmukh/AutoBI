@@ -3,6 +3,7 @@ import { humanize, plural, uid } from '@/lib/util';
 import { positiveValue, tokens } from '@/lib/semantic';
 import { conditionsOf, describe as describeCond } from '@/lib/conditions';
 import { buildMeasureFromText } from './kpiBuilder';
+import { bindCatalogue, catalogueTables } from '@/lib/catalogue';
 
 /** Reporting Foundation Agent: logical model, field mappings and KPI logic (simulated data-mart workspace). */
 
@@ -14,7 +15,7 @@ export function measureLogic(m: MeasureDef, all: MeasureDef[], labelOf: (id: str
     const d = all.find((x) => x.id === m.denominatorId)?.name ?? '?';
     return `[${n}] / [${d}]${m.format === 'percent' ? ' × 100' : ''}`;
   }
-  const fn = { count: 'COUNT', countDistinct: 'COUNT DISTINCT', sum: 'SUM', avg: 'AVERAGE' }[m.kind];
+  const fn = { count: 'COUNT', countDistinct: 'COUNT DISTINCT', sum: 'SUM', avg: 'AVERAGE', median: 'MEDIAN' }[m.kind];
   const conds = conditionsOf(m);
   const where = conds.length ? ` WHERE ${conds.map(describeCond).join(' AND ')}` : '';
   return `${fn}(${labelOf(m.datasetId!)}.${m.field ?? '*'})${where}`;
@@ -23,7 +24,7 @@ export function measureLogic(m: MeasureDef, all: MeasureDef[], labelOf: (id: str
 /** The defined measure that answers a requirement KPI, if any (explicit link first, then a name match). */
 export function measureForRequirement(f: Foundation, requirement: string): MeasureDef | undefined {
   const r = requirement.toLowerCase().trim();
-  const linked = f.measures.find((m) => m.requirementRef?.toLowerCase().trim() === r);
+  const linked = f.measures.find((m) => m.requirementRef?.toLowerCase().trim() === r) ?? f.measures.find((m) => m.catalogueRef?.toLowerCase() === r);
   if (linked) return linked;
   const kt = tokens(requirement.replace(/\s+by\s+.+$/i, ''));
   if (!kt.length) return undefined;
@@ -54,7 +55,7 @@ export function reconcileMappings(u: DataUnderstanding, f: Foundation) {
 export function fillRequirementGaps(f: Foundation, u: DataUnderstanding, spec: RequirementSpec | null) {
   const label = (id: string) => u.profiles.find((p) => p.datasetId === id)?.label ?? id;
   for (const k of spec?.kpis ?? []) {
-    if (f.measures.some((m) => m.requirementRef?.toLowerCase() === k.text.toLowerCase())) continue;
+    if (f.measures.some((m) => m.requirementRef?.toLowerCase() === k.text.toLowerCase() || m.catalogueRef?.toLowerCase() === k.text.toLowerCase())) continue;
     const kt = tokens(k.text.replace(/\s+by\s+.+$/i, ''));
     if (f.measures.some((m) => { const mt = tokens(m.name); return mt.length === kt.length && kt.every((t) => mt.includes(t)); })) continue;
     const built = buildMeasureFromText(k.text, u, f.measures);
@@ -70,6 +71,7 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
   const fieldMaps: FieldMap[] = [];
   const measures: MeasureDef[] = [];
   const assumptions: string[] = [];
+  const keepDateNames = new Set(Object.values(catalogueTables(u.profiles)).filter((x) => !!x).map((x) => x!.datasetId));
 
   for (const p of u.profiles) {
     const kind = p.kind === 'activity' ? 'fact' : 'dimension';
@@ -84,7 +86,8 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
       description: p.inference,
     });
     for (const c of p.columns) {
-      const isFactDate = kind === 'fact' && c.name === p.dateField;
+      // case logs and patient journeys keep their business date names (Case Open Date, Referral Date) — FRMs read them on the case timeline
+      const isFactDate = kind === 'fact' && c.name === p.dateField && !keepDateNames.has(p.datasetId);
       fieldMaps.push({
         id: uid('fm'),
         sourceDataset: p.datasetId,
@@ -145,10 +148,13 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
   for (const p of u.profiles.filter((x) => x.kind === 'master')) {
     add({ name: `Total ${plural(p.entity)}`, description: `Number of ${p.entity.toLowerCase()}s in ${p.label}.`, kind: 'count', datasetId: p.datasetId, field: p.primaryKey, format: 'number', assumptions: ['Not affected by the reporting period filter (master data).'] });
   }
+  // ProcDNA KPI catalogue: catalogue-defined measures for whatever the data supports (FRM case log, SP journey)
+  const catalogue = bindCatalogue(u, measures);
+  measures.push(...catalogue.measures);
   // KPIs named in the requirements that the generic rules didn't cover (e.g. "Patients awaiting PA")
   for (const k of opts.requirementKpis === false ? [] : spec?.kpis ?? []) {
     const kt = tokens(k.text.replace(/\s+by\s+.+$/i, ''));
-    const covered = measures.some((m) => { const mt = tokens(m.name); return mt.length === kt.length && kt.every((t) => mt.includes(t)); });
+    const covered = measures.some((m) => m.catalogueRef?.toLowerCase() === k.text.toLowerCase() || (() => { const mt = tokens(m.name); return mt.length === kt.length && kt.every((t) => mt.includes(t)); })());
     if (covered) continue;
     const built = buildMeasureFromText(k.text, u, measures);
     if (!built) continue;
@@ -165,6 +171,11 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
   if (spec) {
     for (const k of spec.kpis) {
       if (/ by /i.test(k.text)) continue;
+      const exact = measures.find((m) => m.catalogueRef?.toLowerCase() === k.text.toLowerCase() || m.name.toLowerCase() === k.text.toLowerCase());
+      if (exact) {
+        exact.requirementRef = exact.requirementRef ?? k.text;
+        continue;
+      }
       const kt = tokens(k.text);
       const best = measures
         .map((m) => ({ m, s: tokens(m.name).filter((t) => kt.includes(t)).length - Math.abs(tokens(m.name).length - kt.length) * 0.2 }))
@@ -174,5 +185,6 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
   }
   const gaps = u.mappings.filter((m) => m.status === 'missing').map((m) => `${m.requirement} — ${m.note}`);
   assumptions.push('Relationships are many-to-one from activity (fact) tables to master (dimension) tables.', 'Reporting period filters apply to the event date of each fact table; master data is not date-filtered.', 'Records with unmatched join keys are kept in totals and shown as "(Unmatched)" when sliced by master attributes.');
-  return { generatedAt: new Date().toISOString(), tables, fieldMaps, measures, gaps, assumptions };
+  if (catalogue.coverage.some((c) => c.status !== 'needs_data')) assumptions.push('KPIs marked "ProcDNA KPI Catalogue" follow the catalogue definition and computation; unit suffixes are dropped from the reporting name.');
+  return { generatedAt: new Date().toISOString(), tables, fieldMaps, measures, gaps, assumptions, catalogue: catalogue.coverage };
 }

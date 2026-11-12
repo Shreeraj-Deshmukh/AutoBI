@@ -108,8 +108,9 @@ export function buildMeasureFromText(text: string, u: DataUnderstanding, existin
     const cols = ds.columns.filter((c) => c.role === 'measure');
     const ranked = cols.map((c) => ({ c, s: tokens(c.name).filter((t) => want.has(t) || (t === 'day' && /time|days|duration/i.test(clean))).length })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
     if (ranked.length) {
-      const avg = /average|avg|mean|median/i.test(clean);
-      return { main: { id: uid('m'), name, kind: avg ? 'avg' : 'sum', datasetId: ds.datasetId, field: ranked[0].c.name, condition: conds[0], conditions: conds.slice(1), format: avg ? 'decimal' : 'number', logic: '', ...base, description: `${avg ? 'Average' : 'Sum'} of ${ranked[0].c.name}${conds.length ? ' where ' + conds.map((c) => `${c.field} ${c.op} ${c.values.join('/')}`).join(' and ') : ''}.` }, extra: [] };
+      const med = /\bmedian\b/i.test(clean);
+      const avg = med || /average|avg|mean/i.test(clean);
+      return { main: { id: uid('m'), name, kind: med ? 'median' : avg ? 'avg' : 'sum', datasetId: ds.datasetId, field: ranked[0].c.name, condition: conds[0], conditions: conds.slice(1), format: avg ? 'decimal' : 'number', logic: '', ...base, description: `${med ? 'Median' : avg ? 'Average' : 'Sum'} of ${ranked[0].c.name}${conds.length ? ' where ' + conds.map((c) => `${c.field} ${c.op} ${c.values.join('/')}`).join(' and ') : ''}.` }, extra: [] };
     }
   }
 

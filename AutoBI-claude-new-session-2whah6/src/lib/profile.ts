@@ -83,7 +83,7 @@ function inferRole(p: ColumnProfile, n: number): ColumnRole {
   if (ID_RE.test(p.name) && (p.type !== 'number' || p.uniquePct > 50)) return p.uniquePct >= 99 && p.missing === 0 ? 'identifier' : 'foreign_key';
   if (p.type === 'boolean') return 'status';
   if (p.type === 'integer' || p.type === 'number') {
-    if (p.distinct <= 12 && n > 50 && p.type === 'integer' && !/(amount|count|qty|quantity|value|revenue|sales|units|score|cost|price|trx|nrx|nbrx|rx$|scripts?|samples?|dropped|volume|patients|visits|minutes|hours|spend)/i.test(p.name)) return 'dimension';
+    if (p.distinct <= 12 && n > 50 && p.type === 'integer' && !/(amount|count|qty|quantity|value|revenue|sales|units|score|cost|price|trx|nrx|nbrx|rx$|scripts?|samples?|dropped|volume|patients|visits|minutes|hours|days|hrs|spend)/i.test(p.name)) return 'dimension';
     return 'measure';
   }
   if (p.distinct <= 6 && STATUS_RE.test(p.name)) return 'status';

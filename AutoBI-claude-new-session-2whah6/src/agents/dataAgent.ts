@@ -3,6 +3,7 @@ import { classifyDatasets, detectIssues, detectRelationships, profileDataset } f
 import { findEntityDataset, findField, findStatus } from '@/lib/semantic';
 import { uid } from '@/lib/util';
 import { buildMeasureFromText } from './kpiBuilder';
+import { bindCatalogue } from '@/lib/catalogue';
 
 /** Data Intelligence Agent: profiling, understanding, relationships, quality, requirement mapping. */
 
@@ -17,9 +18,24 @@ const STATUS_WORDS = ['deliver', 'open', 'click', 'complet', 'convert', 'respond
 export function mapRequirements(spec: RequirementSpec, profiles: DatasetProfile[], rels: Relationship[]): ReqMapping[] {
   const out: ReqMapping[] = [];
   const primaryActivity = profiles.find((p) => p.kind === 'activity');
+  const catalogue = bindCatalogue({ profiles });
+  const label = (id?: string) => profiles.find((p) => p.datasetId === id)?.label;
 
   for (const k of spec.kpis) {
     const [metricText, dimText] = k.text.split(/\s+by\s+/i);
+    // a ProcDNA catalogue KPI: map it with the catalogue's computation, or say which source it needs
+    const want = metricText.trim().toLowerCase();
+    const bound = catalogue.measures.find((m) => m.catalogueRef?.toLowerCase() === want || m.name.toLowerCase() === want);
+    if (bound) {
+      const parts = bound.kind === 'ratio' ? catalogue.measures.filter((m) => m.id === bound.numeratorId || m.id === bound.denominatorId) : [bound];
+      out.push({ id: uid('map'), requirement: k.text, kind: 'kpi', sources: [...new Set(parts.map((m) => label(m.datasetId)).filter((x): x is string => !!x))], fields: [...new Set(parts.flatMap((m) => [...(m.field ? [m.field] : []), ...[m.condition, ...(m.conditions ?? [])].filter((c) => !!c).map((c) => c!.field)]))], status: bound.kind === 'ratio' || bound.kind === 'avg' || bound.kind === 'median' ? 'calculation_required' : 'available', note: `ProcDNA KPI Catalogue — ${bound.assumptions[0]?.replace(/^ProcDNA KPI Catalogue: /, '') ?? bound.description}` });
+      continue;
+    }
+    const cov = catalogue.coverage.find((c) => c.metric.toLowerCase() === want && c.status === 'needs_data');
+    if (cov) {
+      out.push({ id: uid('map'), requirement: k.text, kind: 'kpi', sources: [], fields: [], status: 'missing', note: `ProcDNA KPI Catalogue metric. ${cov.note}` });
+      continue;
+    }
     const built = buildMeasureFromText(k.text, { profiles, relationships: rels } as unknown as DataUnderstanding, []);
     if (built && !/^total /i.test(metricText.trim())) {
       const all = [built.main, ...built.extra];

@@ -2,22 +2,73 @@ import { Fragment, useState } from 'react';
 import { GripVertical, Trash2, ArrowUp, ArrowDown, Calendar, ChevronDown } from 'lucide-react';
 import type { DashComponent, DashboardSpec, Foundation } from '@/types';
 import { cx } from '@/components/ui';
-import { CHART_LABELS } from '@/agents/designAgent';
+import { CARD_TYPES, CHART_LABELS, cardWeight } from '@/agents/designAgent';
 import { PERIOD_LABELS } from '@/lib/dates';
 import BrandLogo from '@/components/BrandLogo';
 import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
 
-/** Length of the run of consecutive KPI cards containing index i (KPI rows share the full width). */
-function kpiRun(cs: DashComponent[], i: number) {
+/** Grid span (of 60) for a card: consecutive cards in a section share the row in proportion to the values they show. */
+function cardSpan(cs: DashComponent[], i: number) {
+  const card = (k: number) => CARD_TYPES.includes(cs[k].type) && (k === i || cs[k].section === cs[i].section);
   let a = i;
   let b = i;
-  while (a > 0 && cs[a - 1].type === 'kpi') a--;
-  while (b < cs.length - 1 && cs[b + 1].type === 'kpi') b++;
-  return Math.min(6, b - a + 1);
+  while (a > 0 && card(a - 1)) a--;
+  while (b < cs.length - 1 && card(b + 1)) b++;
+  // wrap long runs: at most 6 weight units per row
+  const run = cs.slice(a, b + 1);
+  const rows: DashComponent[][] = [[]];
+  for (const c of run) {
+    const cur = rows[rows.length - 1];
+    if (cur.length && (cur.reduce((s, x) => s + cardWeight(x), 0) + cardWeight(c) > 8 || cur.length >= 6)) rows.push([c]);
+    else cur.push(c);
+  }
+  const row = rows.find((r) => r.includes(cs[i]))!;
+  const total = row.reduce((s, x) => s + cardWeight(x), 0);
+  return Math.max(6, Math.floor((60 * cardWeight(cs[i])) / total));
 }
 
 function Placeholder({ c }: { c: DashComponent }) {
   const bars = [62, 88, 45, 74, 55, 92, 38, 67];
+  if (c.type === 'kpiGroup' || c.type === 'extremes') {
+    const n = c.type === 'extremes' ? 2 : c.dimension ? 5 : Math.max(1, c.measureIds.length);
+    return (
+      <div className="grid divide-x divide-slate-200" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+        {Array.from({ length: n }, (_, i) => (
+          <div key={i} className="px-1.5 first:pl-0">
+            <div className="truncate text-[0.625rem] text-slate-400">{c.type === 'extremes' ? (i ? (c.lowIsBest ? 'Slowest' : 'Lowest') : c.lowIsBest ? 'Fastest' : 'Highest') : c.labels?.[i] ?? (c.dimension ? 'Category' : 'Value')}</div>
+            <div className="mt-1 h-5 w-full max-w-[3.5rem] rounded bg-slate-200" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (c.type === 'records')
+    return (
+      <div className="space-y-1">
+        <div className="flex gap-1.5 border-b border-slate-200 pb-1">{(c.tableColumns ?? []).slice(0, 9).map((k) => <div key={k} className="flex-1 truncate text-[0.5625rem] font-medium text-slate-400">{k.split('::')[1]?.replace(/_/g, ' ')}</div>)}</div>
+        {[0, 1, 2, 3, 4].map((r) => <div key={r} className="flex gap-1.5">{(c.tableColumns ?? []).slice(0, 9).map((k) => <div key={k} className="h-2 flex-1 rounded bg-slate-100" />)}</div>)}
+        {c.toggle && <div className="pt-1 text-[0.625rem] text-slate-400">Toggle: All · {c.toggle.label}</div>}
+      </div>
+    );
+  if (c.type === 'scatter')
+    return (
+      <svg viewBox="0 0 200 80" className="h-28 w-full">
+        <line x1="10" y1="72" x2="198" y2="72" stroke="#e2e8f0" /><line x1="10" y1="4" x2="10" y2="72" stroke="#e2e8f0" />
+        {[[30, 50], [55, 30], [70, 58], [95, 22], [120, 44], [150, 18], [170, 60], [185, 36]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="4" fill="#93b4fd" />)}
+      </svg>
+    );
+  if (c.type === 'drilldown')
+    return (
+      <div className="flex gap-3 py-1">
+        <div className="h-8 w-14 rounded bg-navy-800/80" />
+        {(c.levels ?? []).map((k, i) => (
+          <div key={k} className="flex-1 space-y-1">
+            <div className="truncate text-[0.5625rem] font-medium text-slate-400">{k.split('::')[1]?.replace(/_/g, ' ')}</div>
+            {[80, 55, 35].slice(0, i === 0 ? 3 : 2).map((w, j) => <div key={j} className="h-2 rounded-sm bg-brand-200" style={{ width: `${w}%` }} />)}
+          </div>
+        ))}
+      </div>
+    );
   if (c.type === 'kpi')
     return (
       <div>
@@ -153,7 +204,7 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
           <Fragment key={c.id}>
           {c.section && c.section !== page.components[i - 1]?.section && <div style={{ gridColumn: 'span 60 / span 60' }} className="flex items-center gap-3 pt-1 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-navy-800">{c.section}<span className="h-px flex-1 bg-slate-300/70" /></div>}
           <div
-            style={{ gridColumn: `span ${c.type === 'kpi' ? Math.floor(60 / kpiRun(page.components, i)) : c.width * 5} / span ${c.type === 'kpi' ? Math.floor(60 / kpiRun(page.components, i)) : c.width * 5}` }}
+            style={{ gridColumn: `span ${CARD_TYPES.includes(c.type) ? cardSpan(page.components, i) : c.width * 5} / span ${CARD_TYPES.includes(c.type) ? cardSpan(page.components, i) : c.width * 5}` }}
             key={c.id}
             draggable={!readOnly}
             onDragStart={(e) => { setDragId(c.id); e.dataTransfer.effectAllowed = 'move'; }}
@@ -169,7 +220,7 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate text-[0.8125rem] font-semibold text-navy-900">{c.title}</div>
-                <div className="truncate text-[0.625rem] text-slate-500">{CHART_LABELS[c.type]} · {c.measureIds.map(mname).join(', ')}{c.dimension ? ` by ${fieldLabel(foundation, c.dimension)}` : ''}{c.series ? ` × ${fieldLabel(foundation, c.series)}` : ''}{c.timeGrain && c.type !== 'kpi' ? ` · ${c.timeGrain}ly` : ''}</div>
+                <div className="truncate text-[0.625rem] text-slate-500">{CHART_LABELS[c.type]} · {c.measureIds.map(mname).join(', ')}{c.levels ? ` · ${c.levels.map((x) => fieldLabel(foundation, x)).join(' › ')}` : c.dimension ? ` by ${fieldLabel(foundation, c.dimension)}` : ''}{c.series ? ` × ${fieldLabel(foundation, c.series)}` : ''}{c.timeGrain && c.type !== 'kpi' ? ` · ${c.timeGrain}ly` : ''}</div>
               </div>
               {!readOnly && (
                 <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-md bg-white/95 opacity-0 shadow-sm group-hover:opacity-100">

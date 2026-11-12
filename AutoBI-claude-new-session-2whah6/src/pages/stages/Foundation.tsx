@@ -10,8 +10,9 @@ import { useEngine } from '@/store/engineCache';
 import { emptyFilters } from '@/lib/engine';
 import { fmtNumber, uid } from '@/lib/util';
 import { prettify } from '@/lib/fieldLabels';
+import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
 
-type Tab = 'model' | 'mapping' | 'kpis';
+type Tab = 'model' | 'mapping' | 'kpis' | 'catalogue';
 
 export default function FoundationStage({ p }: { p: Project }) {
   const nav = useNavigate();
@@ -29,7 +30,7 @@ export default function FoundationStage({ p }: { p: Project }) {
   ) : (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <Tabs<Tab> className="flex-1" value={tab} onChange={setTab} tabs={[{ id: 'model', label: 'Data model' }, { id: 'kpis', label: 'KPI Definitions', count: f.measures.length }, { id: 'mapping', label: 'Field Mapping', count: f.fieldMaps.length }]} />
+        <Tabs<Tab> className="flex-1" value={tab} onChange={setTab} tabs={[{ id: 'model', label: 'Data model' }, { id: 'kpis', label: 'KPI Definitions', count: f.measures.length }, { id: 'mapping', label: 'Field Mapping', count: f.fieldMaps.length }, ...(f.catalogue?.length ? [{ id: 'catalogue' as const, label: 'ProcDNA KPI Catalogue', count: f.catalogue.filter((c) => c.status !== 'needs_data').length }] : [])]} />
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} loading={busy} onClick={() => confirm('Regenerate the foundation? User edits to KPIs will be replaced by a new proposal (previous versions are kept in history).') && runFoundationAgent(p.id)}>Regenerate</Button>
@@ -68,6 +69,7 @@ export default function FoundationStage({ p }: { p: Project }) {
         </Card>
       )}
 
+      {tab === 'catalogue' && <CatalogueTab p={p} />}
       {tab === 'kpis' && <DescribeKpi pid={p.id} />}
       {tab === 'kpis' && f.gaps.length > 0 && <Callout tone="warning" title="Data gaps">{f.gaps.join(' · ')}</Callout>}
       {tab === 'kpis' && (
@@ -80,7 +82,7 @@ export default function FoundationStage({ p }: { p: Project }) {
                   const v = engine?.value(m.id, emptyFilters(), null);
                   return (
                     <tr key={m.id}>
-                      <td className="td"><div className="font-medium text-navy-900">{m.name}{m.userModified && <Badge tone="violet" className="ml-1.5">edited</Badge>}</div><div className="text-[0.6875rem] text-slate-500">{m.description}</div></td>
+                      <td className="td"><div className="font-medium text-navy-900">{m.name}{m.catalogueRef && <span title={`ProcDNA KPI Catalogue: ${m.catalogueRef}`}><Badge tone="blue" className="ml-1.5">catalogue</Badge></span>}{m.userModified && <Badge tone="violet" className="ml-1.5">edited</Badge>}</div><div className="text-[0.6875rem] text-slate-500">{m.description}</div></td>
                       <td className="td font-mono text-[0.6875rem] text-slate-700">{m.logic}</td>
                       <td className="td text-right tabular-nums">{v == null ? <span className="text-red-600">n/a</span> : m.format === 'percent' ? `${v.toFixed(1)}%` : fmtNumber(v, m.format === 'decimal' ? 2 : 0)}</td>
                       <td className="td text-xs">{m.requirementRef ? <Badge tone="green">{m.requirementRef}</Badge> : <span className="text-slate-400">Derived</span>}</td>
@@ -103,6 +105,51 @@ export default function FoundationStage({ p }: { p: Project }) {
       <StageLayout main={main} side={<AgentPanel p={p} agent="foundation" next={approved ? 'The approved foundation (tables, relationships and KPI logic) feeds the Dashboard Design Agent.' : 'Review the model, mappings and KPI logic. Approve to unlock design approval.'} />} />
       {editing && <MeasureEditor p={p} m={editing} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+/** How the ProcDNA KPI catalogue (Case and FRM Management) maps onto this project's data. */
+function CatalogueTab({ p }: { p: Project }) {
+  const f = p.foundation!;
+  const engine = useEngine(p);
+  const [cat, setCat] = useState<'all' | 'Case Management' | 'FRM Management'>('all');
+  const [onlyKpi, setOnlyKpi] = useState(false);
+  const rows = (f.catalogue ?? []).filter((c) => (cat === 'all' || c.category === cat) && (!onlyKpi || c.isKpi));
+  const meta = (name: string) => KPI_CATALOGUE.find((m) => m.name === name);
+  const counts = { computed: rows.filter((c) => c.status === 'computed').length, same: rows.filter((c) => c.status === 'same_as').length, needs: rows.filter((c) => c.status === 'needs_data').length };
+  return (
+    <Card
+      title="ProcDNA KPI Catalogue — Case and FRM Management"
+      subtitle={`${counts.computed} computed from the data · ${counts.same} answered by another KPI · ${counts.needs} need another source. Catalogue KPIs keep the catalogue's definition and computation.`}
+      actions={
+        <div className="flex items-center gap-2">
+          <select className="input py-1 text-xs" value={cat} onChange={(e) => setCat(e.target.value as typeof cat)} aria-label="Catalogue category"><option value="all">All categories</option><option>Case Management</option><option>FRM Management</option></select>
+          <label className="flex items-center gap-1 text-xs text-slate-600"><input type="checkbox" checked={onlyKpi} onChange={(e) => setOnlyKpi(e.target.checked)} />KPIs only</label>
+        </div>
+      }
+      bodyClass="p-0"
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full" data-testid="catalogue-table">
+          <thead><tr><th className="th">Catalogue metric</th><th className="th">Status</th><th className="th">Computed as</th><th className="th text-right">Live value</th><th className="th">Catalogue computation / note</th></tr></thead>
+          <tbody>
+            {rows.map((c) => {
+              const m = f.measures.find((x) => x.id === c.measureId);
+              const v = m ? engine?.value(m.id, emptyFilters(), null) : null;
+              return (
+                <tr key={c.metric} className={cx(c.status === 'needs_data' && 'text-slate-400')}>
+                  <td className="td"><div className={cx('font-medium', c.status === 'needs_data' ? 'text-slate-500' : 'text-navy-900')}>{c.metric}{c.isKpi && <Badge tone="green" className="ml-1.5">KPI</Badge>}</div><div className="text-[0.6875rem] text-slate-500">{meta(c.metric)?.definition}</div></td>
+                  <td className="td whitespace-nowrap">{c.status === 'computed' ? <Badge tone="green">Computed</Badge> : c.status === 'same_as' ? <Badge tone="blue">Same as</Badge> : <Badge tone="slate">Needs data</Badge>}</td>
+                  <td className="td text-xs">{m ? <><div className="font-medium text-slate-700">{m.name}</div><div className="font-mono text-[0.625rem] text-slate-500">{m.logic}</div></> : '—'}</td>
+                  <td className="td text-right tabular-nums">{v == null ? '—' : m!.format === 'percent' ? `${v.toFixed(1)}%` : fmtNumber(v, m!.format === 'decimal' ? 1 : 0)}</td>
+                  <td className="td text-[0.6875rem]">{c.status === 'same_as' ? c.note : <span className="font-mono">{meta(c.metric)?.computation}</span>}{c.status === 'needs_data' && <div className="mt-0.5 font-sans text-amber-700">{c.note}</div>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -141,7 +188,7 @@ function MeasureEditor({ p, m, onClose }: { p: Project; m: MeasureDef; onClose: 
         <div className="sm:col-span-2"><Field label="Business definition"><input className="input" value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} /></Field></div>
         <Field label="Aggregation">
           <select className="input" value={d.kind} onChange={(e) => setD({ ...d, kind: e.target.value as MeasureDef['kind'] })}>
-            <option value="count">COUNT</option><option value="countDistinct">COUNT DISTINCT</option><option value="sum">SUM</option><option value="avg">AVERAGE</option><option value="ratio">RATIO (A / B)</option>
+            <option value="count">COUNT</option><option value="countDistinct">COUNT DISTINCT</option><option value="sum">SUM</option><option value="avg">AVERAGE</option><option value="median">MEDIAN</option><option value="ratio">RATIO (A / B)</option>
           </select>
         </Field>
         {d.kind === 'ratio' ? (

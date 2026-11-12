@@ -42,6 +42,7 @@ write('brand', 'brief.txt', `Project: Zentrava Brand Performance\nClient / BU: O
 const acc = generateAccessData();
 write('access', 'sp_patient_journey.csv', toCsv(acc.journey));
 write('access', 'payer_plan_pbm.csv', toCsv(acc.plans));
+write('access', 'frm_cases.csv', toCsv(acc.cases));
 // corrected payer file: the data owner adds the plan that 3 SP cases reference
 write('access/corrections', 'payer_plan_pbm.csv', toCsv([...acc.plans, { Plan_ID: 'PL-9999', Plan_Name: 'Highmark BCBS PPO', Payer: 'BCBS (regional plans)', Channel: 'Commercial', PBM: 'Prime Therapeutics', Formulary_Status: 'Covered with PA' }]));
 const awb = XLSX.utils.book_new();
@@ -61,16 +62,27 @@ Files to attach in the Data step:
 - sp_patient_journey.csv   specialty pharmacy patient journey: referral → benefits verification → PA → decision / appeal → therapy start
 - payer_plan_pbm.csv       payer, plan, channel, PBM and formulary status
 - hcp_frm_alignment.xlsx   sheet "HCPs" (HCP, specialty, institution, territory) and sheet "FRM Territories" (territory, region, FRM)
+- frm_cases.csv            FRM case log: one row per access case (benefit investigation, PA support, appeal,
+                           reimbursement support, query) with status, priority, escalation, open / first action / close dates
+
+What the FRM view shows (ProcDNA FRM report layout):
+- Reporting Foundation → "ProcDNA KPI Catalogue" tab: which Case and FRM Management catalogue metrics the data
+  computes (and which need CRM / survey / finance data).
+- Design Studio → page "Field Reimbursement Management": case summary cards, Priority Prescribers with flags,
+  Open Case Aging and the Open Cases list (toggle "Escalated only"; click a case to see where the patient is stuck).
+- Page "FRM Performance": territory scorecard (highest / lowest), case volume and closure rate by territory,
+  FRM response time, case load vs response time, and the Case Journey drilldown (region > territory > case type > status).
 
 Live change request for the demo (Step 4):
 1. Requirements chat:  "FRMs also need to see HCPs where more than five patients are currently experiencing prior authorization delays."
 2. Reporting Foundation → Describe a KPI:  "Patients with PA pending for more than 14 days"
-3. Design assistant:  "Show HCPs with more than 5 patients with PA pending for more than 14 days"
+3. Design assistant:  "Show HCPs with more than 5 patients with PA pending for more than 14 days to Patient Access Overview"
 
 Planned test failure (Step 5), shows on every run:
-  "Patient Activity ↔ Plan Master: 3 records reference a Plan_ID not present in Plan Master".
+  "Patient Activity ↔ Plan Master: 3 records reference a Plan_ID not present in Plan Master"
+  (and the FRM cases of those patients: "Case Activity ↔ Plan Master: 4 records …").
   Fix: in the Data step upload corrections/payer_plan_pbm.csv (same file name → replaces the payer file,
-  approvals are kept), then Testing → Run automated tests → the test passes.
+  approvals are kept), then Testing → Run automated tests → both tests pass.
 Also possible: if a "Total Patients" KPI counts rows instead of unique patients, the
   "counts each patient once" test fails (re-referred patients appear twice). Fix: KPI Definitions →
   edit the KPI → COUNT DISTINCT → re-run.

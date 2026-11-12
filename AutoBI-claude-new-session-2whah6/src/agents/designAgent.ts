@@ -5,6 +5,8 @@ import { humanize, plural, uid } from '@/lib/util';
 import { fieldLabel, visibleProfiles } from '@/lib/fieldLabels';
 import { conditionsOf } from '@/lib/conditions';
 import { reachable } from './dataAgent';
+import { buildFrmLayout } from './frmTemplate';
+import { isCatalogueHelper } from '@/lib/catalogue';
 
 /** Dashboard Design Agent: generates and edits a configuration-driven wireframe. */
 
@@ -20,7 +22,19 @@ export const CHART_LABELS: Record<ComponentType, string> = {
   donut: 'Donut chart',
   table: 'Table',
   funnel: 'Funnel',
+  kpiGroup: 'KPI group card',
+  extremes: 'Highest / lowest card',
+  records: 'Case list',
+  scatter: 'Scatter plot',
+  drilldown: 'Hierarchical drilldown',
 };
+
+/** Visual types built by templates (FRM report); they need template-specific settings, so they are not offered for free-form switching. */
+export const TEMPLATE_TYPES: ComponentType[] = ['kpiGroup', 'extremes', 'records', 'scatter', 'drilldown'];
+/** Card-style components laid out side by side in a row. */
+export const CARD_TYPES: ComponentType[] = ['kpi', 'kpiGroup', 'extremes'];
+/** Relative width of a card in its row (number of values it shows). */
+export const cardWeight = (c: DashComponent) => (c.type === 'kpiGroup' ? (c.dimension ? 5 : Math.max(1, c.measureIds.length)) : c.type === 'extremes' ? 2 : 1);
 
 interface Ctx {
   u: DataUnderstanding;
@@ -30,7 +44,7 @@ interface Ctx {
 }
 
 function measuresOf(f: Foundation, datasetId: string) {
-  const own = f.measures.filter((m) => m.datasetId === datasetId);
+  const own = f.measures.filter((m) => m.datasetId === datasetId && !isCatalogueHelper(m));
   const ratios = f.measures.filter((m) => m.kind === 'ratio' && own.some((o) => o.id === m.numeratorId));
   const count = own.find((m) => m.kind === 'count' && !m.condition);
   // a volume measure (TRx, revenue, units…) is a better headline than a row count
@@ -62,9 +76,13 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
   const ctx: Ctx = { u, f, spec, label };
   const grain: TimeGrain = spec?.timeGrain ?? 'week';
   const comparison = spec ? spec.comparison || spec.ambiguities.every((a) => a.field !== 'comparison' || !a.answer?.toLowerCase().startsWith('no')) : true;
-  const acts = u.profiles.filter((p) => p.kind === 'activity');
   const masters = u.profiles.filter((p) => p.kind === 'master');
   const pages: DashPage[] = [];
+  // FRM case log present → the ProcDNA FRM report pages lead the dashboard; the case log needs no generic page
+  const frm = buildFrmLayout(u0, f);
+  if (frm) pages.push(...frm.pages);
+  const acts = u.profiles.filter((p) => p.kind === 'activity' && p.datasetId !== frm?.caseDatasetId);
+  const caseDs = frm?.caseDatasetId;
 
   // requested breakdowns ("Calls by segment")
   const breakdowns: { m: MeasureDef; dim: FieldRef; text: string }[] = [];
@@ -157,14 +175,15 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
 
   // ── Entity-level performance (master with name attribute)
   for (const mst of masters) {
-    const linked = acts.filter((a) => reachable(u.relationships, a.datasetId, mst.datasetId));
+    const linked = [...acts, ...u.profiles.filter((p) => p.datasetId === caseDs)].filter((a) => reachable(u.relationships, a.datasetId, mst.datasetId));
     const nameCol = mst.columns.find((c) => /name/i.test(c.name) && c.role === 'attribute') ?? mst.columns.find((c) => c.role === 'attribute');
     if (!linked.length || !nameCol || mst.rowCount <= 60) continue;
     const measureIds: string[] = [];
     for (const a of linked) {
       const ms = measuresOf(f, a.datasetId);
       if (ms.total) measureIds.push(ms.total.id);
-      measureIds.push(...ms.conditional.map((m) => m.id));
+      // the case log contributes its open backlog only; the FRM pages carry the rest
+      measureIds.push(...(a.datasetId === caseDs ? ms.conditional.filter((m) => m.catalogueRef === 'Open Case Backlog') : ms.conditional).map((m) => m.id));
     }
     const attrs = mst.columns.filter((c) => c.role === 'dimension').slice(0, 5).map((c) => ref(mst.datasetId, c.name));
     const first = measuresOf(f, linked[0].datasetId).total!;
@@ -178,7 +197,7 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
   }
 
   // ── Filters
-  const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }];
+  const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }, ...(frm?.filters ?? [])];
   const filterTexts = (spec?.filters ?? []).map((x) => x.text).filter((t) => !/period|date|time/i.test(t));
   for (const t of filterTexts) {
     const r = resolveDim(t, ctx);
@@ -187,8 +206,9 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
   if (filters.length < 3) {
     for (const p of [...masters, ...acts]) for (const d of ownDims(p, 30).slice(0, 2)) if (filters.length < 5 && !filters.some((x) => x.field === d)) filters.push({ id: uid('flt'), label: dimLabel(d), type: 'multi', field: d });
   }
-  const preset = grain === 'week' ? 'r13w' : grain === 'month' ? 'last6m' : 'last12m';
-  return { pages, filters, defaultPeriod: preset, timeGrain: grain };
+  // the FRM report opens on calendar year to date
+  const preset = frm ? 'ytd' : grain === 'week' ? 'r13w' : grain === 'month' ? 'last6m' : 'last12m';
+  return { pages, filters: frm ? filters.slice(0, 8) : filters, defaultPeriod: preset, timeGrain: grain };
 }
 
 // ───────────────────────── Funnel-style overview ─────────────────────────
@@ -205,16 +225,19 @@ function buildFunnelPage(ctx: Ctx, grain: TimeGrain, comparison: boolean): DashP
     return i < 0 ? 99 : i;
   };
   const isCount = (m: MeasureDef) => m.kind === 'count' || m.kind === 'countDistinct';
-  const stageCounts = f.measures.filter((m) => m.requirementRef && isCount(m) && conditionsOf(m).some((c) => c.op === 'eq') && !conditionsOf(m).some((c) => c.op === 'notnull'));
-  const fieldsUsed = stageCounts.map((m) => conditionsOf(m)[0].field);
+  const allStageCounts = f.measures.filter((m) => m.requirementRef && isCount(m) && conditionsOf(m).some((c) => c.op === 'eq') && !conditionsOf(m).some((c) => c.op === 'notnull'));
+  const fieldsUsed = allStageCounts.map((m) => conditionsOf(m)[0].field);
   const stageField = fieldsUsed.find((fld) => /stage|step|milestone|phase|funnel/i.test(fld) && fieldsUsed.filter((x) => x === fld).length >= 2);
-  if (stageCounts.length < 2 || !stageField) return null;
-  const ds = stageCounts[0].datasetId!;
+  if (allStageCounts.length < 2 || !stageField) return null;
+  // the funnel lives on the dataset that carries the stage field (other datasets, e.g. a case log, may also define counts)
+  const ds = allStageCounts.find((m) => conditionsOf(m)[0].field === stageField)!.datasetId!;
+  const stageCounts = allStageCounts.filter((m) => m.datasetId === ds);
+  const dsOfMeasure = (m: MeasureDef): string | undefined => m.datasetId ?? (m.numeratorId ? dsOfMeasure(f.measures.find((x) => x.id === m.numeratorId)!) : undefined);
   const prof = u.profiles.find((p) => p.datasetId === ds)!;
   const base = f.measures.find((m) => m.datasetId === ds && isCount(m) && !conditionsOf(m).length && m.requirementRef) ?? f.measures.find((m) => m.datasetId === ds && m.kind === 'countDistinct' && !conditionsOf(m).length && m.field === prof.primaryKey) ?? f.measures.find((m) => m.datasetId === ds && m.kind === 'count' && !conditionsOf(m).length);
   if (!base) return null;
   const funnel = [base, ...stageCounts.filter((m) => m.id !== base.id && !/open|unresolved/i.test(conditionsOf(m)[0].values.join(' '))).sort((a, b) => order(a) - order(b))].slice(0, 6);
-  const reqMain = f.measures.filter((m) => m.requirementRef && !/ by /i.test(m.requirementRef) && !m.name.endsWith('numerator') && !m.name.endsWith('denominator')).sort((a, b) => order(a) - order(b));
+  const reqMain = f.measures.filter((m) => m.requirementRef && !/ by /i.test(m.requirementRef) && !m.name.endsWith('numerator') && !m.name.endsWith('denominator') && dsOfMeasure(m) === ds).sort((a, b) => order(a) - order(b));
   const parts = new Set(f.measures.flatMap((m) => [m.numeratorId, m.denominatorId]).filter(Boolean));
   const kpis = [...new Set([base, ...reqMain.filter((m) => !parts.has(m.id) && (m.kind === 'ratio' || m.kind === 'avg' || isCount(m)))])].slice(0, 6);
   const comps: DashComponent[] = [];
@@ -462,5 +485,5 @@ export function applyDesignCommand(input: DashboardSpec, command: string, ctx0: 
 
 export function designStats(spec: DashboardSpec) {
   const all = spec.pages.flatMap((p) => p.components);
-  return { pages: spec.pages.length, kpis: all.filter((c) => c.type === 'kpi').length, charts: all.filter((c) => !['kpi', 'table'].includes(c.type)).length, tables: all.filter((c) => c.type === 'table').length, filters: spec.filters.length };
+  return { pages: spec.pages.length, kpis: all.filter((c) => CARD_TYPES.includes(c.type)).length, charts: all.filter((c) => !CARD_TYPES.includes(c.type) && c.type !== 'table' && c.type !== 'records').length, tables: all.filter((c) => c.type === 'table' || c.type === 'records').length, filters: spec.filters.length };
 }

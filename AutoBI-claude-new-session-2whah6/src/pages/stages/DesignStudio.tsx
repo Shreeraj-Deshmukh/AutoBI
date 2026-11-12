@@ -8,7 +8,7 @@ import { Button, Callout, Card, Badge, Field, Modal, Empty } from '@/components/
 import Wireframe from '@/dashboard/Wireframe';
 import DashboardView from '@/dashboard/DashboardView';
 import { approveDesign, designCommand, isRunning, runDesignAgent, saveDesignDraft, updateDesign } from '@/store/orchestrator';
-import { CHART_LABELS, designStats } from '@/agents/designAgent';
+import { CHART_LABELS, TEMPLATE_TYPES, designStats } from '@/agents/designAgent';
 import { useEngine } from '@/store/engineCache';
 import { PERIOD_LABELS } from '@/lib/dates';
 import { ref } from '@/lib/engine';
@@ -44,6 +44,7 @@ export default function DesignStage({ p }: { p: Project }) {
     change(s, note);
   };
   const dims = visibleProfiles(u.profiles, f).flatMap((pr) => pr.columns.filter((c) => ['dimension', 'status', 'attribute', 'foreign_key'].includes(c.role)).map((c) => ({ ref: ref(pr.datasetId, c.name), label: `${fieldLabel(f, ref(pr.datasetId, c.name))} · ${pr.label}` })));
+  const allCols = visibleProfiles(u.profiles, f).flatMap((pr) => pr.columns.map((c) => ({ ref: ref(pr.datasetId, c.name), label: `${fieldLabel(f, ref(pr.datasetId, c.name))} · ${pr.label}` })));
   const stats = designStats(spec);
   const approved = d.status === 'approved';
   const foundationOk = p.stages.foundation.status === 'approved';
@@ -122,17 +123,25 @@ export default function DesignStage({ p }: { p: Project }) {
             <Field label="Title"><input className="input py-1.5 text-sm" key={comp.id + comp.title} defaultValue={comp.title} onBlur={(e) => e.target.value !== comp.title && editComp({ title: e.target.value }, `Renamed visual to "${e.target.value}"`)} /></Field>
             <Field label="Business description"><textarea className="input py-1.5 text-xs" rows={2} key={comp.id + 'd'} defaultValue={comp.description} onBlur={(e) => e.target.value !== comp.description && editComp({ description: e.target.value }, `Updated description of "${comp.title}"`)} /></Field>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Visual type"><select className="input py-1 text-xs" value={comp.type} onChange={(e) => { const t = e.target.value as ComponentType; if (['bar', 'hbar', 'donut', 'stacked', 'table'].includes(t) && !comp.dimension) { alert('This visual needs a category dimension first.'); return; } editComp({ type: t, ...(t === 'line' || t === 'area' ? { timeGrain: comp.timeGrain ?? spec.timeGrain } : {}), ...(t === 'stacked' && !comp.series ? { series: dims[0]?.ref } : {}) }, `Changed "${comp.title}" to ${CHART_LABELS[t]}`); }}>{(Object.keys(CHART_LABELS) as ComponentType[]).map((t) => <option key={t} value={t}>{CHART_LABELS[t]}</option>)}</select></Field>
+              <Field label="Visual type">
+                {TEMPLATE_TYPES.includes(comp.type) ? (
+                  <select className="input py-1 text-xs" value={comp.type} disabled title="Built from the ProcDNA FRM template"><option value={comp.type}>{CHART_LABELS[comp.type]}</option></select>
+                ) : (
+                  <select className="input py-1 text-xs" value={comp.type} onChange={(e) => { const t = e.target.value as ComponentType; if (['bar', 'hbar', 'donut', 'stacked', 'table'].includes(t) && !comp.dimension) { alert('This visual needs a category dimension first.'); return; } editComp({ type: t, ...(t === 'line' || t === 'area' ? { timeGrain: comp.timeGrain ?? spec.timeGrain } : {}), ...(t === 'stacked' && !comp.series ? { series: dims[0]?.ref } : {}) }, `Changed "${comp.title}" to ${CHART_LABELS[t]}`); }}>{(Object.keys(CHART_LABELS) as ComponentType[]).filter((t) => !TEMPLATE_TYPES.includes(t)).map((t) => <option key={t} value={t}>{CHART_LABELS[t]}</option>)}</select>
+                )}
+              </Field>
               <Field label="Width"><select className="input py-1 text-xs" value={comp.width} onChange={(e) => editComp({ width: Number(e.target.value) as DashComponent['width'] }, `Resized "${comp.title}"`)}>{[3, 4, 6, 8, 12].map((w) => <option key={w} value={w}>{w}/12</option>)}</select></Field>
             </div>
             <Field label="Measure(s)">
-              <select multiple className="input h-28 py-1 text-xs" value={comp.measureIds} onChange={(e) => { const v = Array.from(e.target.selectedOptions).map((o) => o.value); if (v.length) editComp({ measureIds: comp.type === 'kpi' || comp.type === 'bar' || comp.type === 'donut' || comp.type === 'hbar' || comp.type === 'stacked' ? v.slice(0, 1) : v }, `Changed measures of "${comp.title}"`); }}>
+              <select multiple className="input h-28 py-1 text-xs" value={comp.measureIds} onChange={(e) => { const v = Array.from(e.target.selectedOptions).map((o) => o.value); if (v.length) editComp({ measureIds: comp.type === 'scatter' ? v.slice(0, 2) : (comp.type === 'kpiGroup' && !comp.dimension) || ['line', 'area', 'table', 'funnel'].includes(comp.type) ? v : v.slice(0, 1) }, `Changed measures of "${comp.title}"`); }}>
                 {f.measures.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </Field>
-            {comp.type !== 'kpi' && comp.type !== 'line' && comp.type !== 'area' && (
+            {!['kpi', 'line', 'area', 'records', 'drilldown', 'funnel'].includes(comp.type) && (comp.type !== 'kpiGroup' || comp.dimension) && (
               <Field label="Category dimension"><select className="input py-1 text-xs" value={comp.dimension ?? ''} onChange={(e) => editComp({ dimension: e.target.value }, `Changed dimension of "${comp.title}"`)}>{dims.map((x) => <option key={x.ref} value={x.ref}>{x.label}</option>)}</select></Field>
             )}
+            {comp.type === 'drilldown' && <Field label="Drill levels (outermost first)"><select multiple className="input h-24 py-1 text-xs" value={comp.levels ?? []} onChange={(e) => { const v = Array.from(e.target.selectedOptions).map((o) => o.value); if (v.length) editComp({ levels: v, dimension: v[0] }, `Changed drill levels of "${comp.title}"`); }}>{dims.map((x) => <option key={x.ref} value={x.ref}>{x.label}</option>)}</select></Field>}
+            {comp.type === 'records' && <Field label="Columns"><select multiple className="input h-32 py-1 text-xs" value={comp.tableColumns ?? []} onChange={(e) => editComp({ tableColumns: Array.from(e.target.selectedOptions).map((o) => o.value) }, `Changed columns of "${comp.title}"`)}>{allCols.map((x) => <option key={x.ref} value={x.ref}>{x.label}</option>)}</select></Field>}
             {comp.type === 'stacked' && <Field label="Series (stack by)"><select className="input py-1 text-xs" value={comp.series ?? ''} onChange={(e) => editComp({ series: e.target.value }, `Changed series of "${comp.title}"`)}>{dims.map((x) => <option key={x.ref} value={x.ref}>{x.label}</option>)}</select></Field>}
             {(comp.type === 'line' || comp.type === 'area') && <Field label="Time grain"><select className="input py-1 text-xs" value={comp.timeGrain ?? spec.timeGrain} onChange={(e) => editComp({ timeGrain: e.target.value as TimeGrain }, `Changed grain of "${comp.title}"`)}>{['week', 'month', 'quarter'].map((x) => <option key={x}>{x}</option>)}</select></Field>}
             {comp.type === 'kpi' && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={!!comp.comparison} onChange={(e) => editComp({ comparison: e.target.checked }, `${e.target.checked ? 'Enabled' : 'Disabled'} period comparison on "${comp.title}"`)} />Show current vs previous period</label>}
@@ -145,7 +154,7 @@ export default function DesignStage({ p }: { p: Project }) {
           <Button size="sm" variant="subtle" className="w-full" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdding(true)}>Add component to “{page.name}”</Button>
         </Card>
       )}
-      <Chat title="Design assistant" messages={p.designChat} busy={busy} placeholder="Modify this dashboard design…" onSend={(t) => designCommand(p.id, t, page.id)} suggestions={['Add a weekly comparison', 'Remove the state filter', 'Replace the pie chart with a bar chart']} />
+      <Chat title="Design assistant" messages={p.designChat} busy={busy} placeholder="Modify this dashboard design…" onSend={(t) => designCommand(p.id, t, page.id)} suggestions={spec.pages.some((x) => x.template === 'frm') ? ['Add a specialty filter', 'Make Open Case Aging full width', 'Rename Priority Prescribers to Priority HCPs'] : ['Add a weekly comparison', 'Remove the state filter', 'Replace the pie chart with a bar chart']} />
     </>
   );
 
@@ -182,7 +191,7 @@ function AddComponent({ p, onClose, onAdd, dims }: { p: Project; onClose: () => 
   return (
     <Modal open onClose={onClose} title="Add component" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!mid} onClick={() => onAdd({ id: uid('cmp'), type, title: title || auto, description: '', measureIds: [mid], dimension: needsDim ? dim : undefined, series: type === 'stacked' ? dims.find((x) => x.ref !== dim)?.ref : undefined, timeGrain: type === 'line' || type === 'area' ? p.design!.spec.timeGrain : undefined, comparison: type === 'kpi', width: type === 'kpi' ? 3 : type === 'table' ? 12 : 6, tableColumns: type === 'table' ? [] : undefined })}>Add</Button></>}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Visual type"><select className="input" value={type} onChange={(e) => setType(e.target.value as ComponentType)}>{(Object.keys(CHART_LABELS) as ComponentType[]).map((t) => <option key={t} value={t}>{CHART_LABELS[t]}</option>)}</select></Field>
+        <Field label="Visual type"><select className="input" value={type} onChange={(e) => setType(e.target.value as ComponentType)}>{(Object.keys(CHART_LABELS) as ComponentType[]).filter((t) => !TEMPLATE_TYPES.includes(t)).map((t) => <option key={t} value={t}>{CHART_LABELS[t]}</option>)}</select></Field>
         <Field label="Measure"><select className="input" value={mid} onChange={(e) => setMid(e.target.value)}>{f.measures.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
         {needsDim && <div className="sm:col-span-2"><Field label="Category dimension"><select className="input" value={dim} onChange={(e) => setDim(e.target.value)}>{dims.map((x) => <option key={x.ref} value={x.ref}>{x.label}</option>)}</select></Field></div>}
         <div className="sm:col-span-2"><Field label="Title" hint={`Default: ${auto}`}><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={auto} /></Field></div>
