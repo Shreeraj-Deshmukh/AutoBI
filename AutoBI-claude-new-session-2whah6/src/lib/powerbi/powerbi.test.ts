@@ -8,7 +8,12 @@ import { Engine, emptyFilters } from '@/lib/engine';
 import type { MeasureDef, Row } from '@/types';
 import { runDemoPipeline } from './demoPipeline';
 import { chooseActive, decodeEmbedded } from './model';
-import { longestPath, zipExport, type PowerBiExport } from './index';
+import { buildPowerBiProject, longestPath, zipExport, type PowerBiExport } from './index';
+import type { DashboardSpec } from '@/types';
+import { FEATURES } from '@/config/features';
+import { applyDesignCommand } from '@/agents/designAgent';
+import { buildFrmLayout } from '@/agents/frmTemplate';
+import { periodFilterDef } from '@/lib/periodFilter';
 
 // ── Microsoft's PBIR / PBIP JSON schemas (vendored, see __tests__/schemas/README.md)
 const SCHEMAS = path.resolve(__dirname, '__tests__/schemas');
@@ -47,6 +52,9 @@ function unresolvedDax(x: PowerBiExport): string[] {
     }
   return bad;
 }
+
+// these suites export the full FRM report (every filter); the demo storyline with held-back filters is tested at the end
+FEATURES.frmHeldBackFilters = [];
 
 const visualTypes = (x: PowerBiExport) => Object.entries(x.files).filter(([p]) => p.endsWith('visual.json')).map(([, c]) => JSON.parse(c).visual.visualType as string);
 
@@ -176,6 +184,42 @@ describe('Power BI export – Sanofi FRM kit', () => {
     const files = unzipSync(zipExport(x));
     expect(Object.keys(files)).toContain('Sanofi_FRM.pbip');
     expect(Object.keys(files)).toHaveLength(Object.keys(x.files).length);
+  });
+});
+
+describe('FRM demo storyline: Payer and Time Period held back, added with the design assistant', () => {
+  FEATURES.frmHeldBackFilters = ['period', 'payer'];
+  const d = generateAccessData();
+  const r = runDemoPipeline('Sanofi FRM', ACCESS_NARRATIVE, [
+    { name: 'sp_patient_journey', rows: d.journey },
+    { name: 'payer_plan_pbm', rows: d.plans },
+    { name: 'hcps', rows: d.hcps },
+    { name: 'frm_territories', rows: d.territories },
+    { name: 'frm_cases', rows: d.cases },
+    { name: 'product_master', rows: d.products },
+  ]);
+  FEATURES.frmHeldBackFilters = [];
+  const exportOf = (spec: DashboardSpec) => buildPowerBiProject({ name: 'Sanofi FRM', profiles: r.u.profiles, relationships: r.u.relationships, foundation: r.f, rowsOf: r.rowsOf, anchor: r.engine.anchor, minDate: r.engine.minDate, spec });
+  const slicerHeaders = (x: PowerBiExport) => Object.entries(x.files).filter(([p, c]) => p.endsWith('visual.json') && JSON.parse(c).visual.visualType === 'slicer').map(([, c]) => JSON.parse(c).visual.objects.header?.[0]?.properties?.text?.expr?.Literal?.Value as string);
+
+  it('the first export has neither filter', () => {
+    const headers = slicerHeaders(r.pbi);
+    expect(headers).not.toContain("'Payer'");
+    expect(headers).not.toContain("'Time Period'");
+    expect(headers).not.toContain("'Custom Date'");
+    expect(schemaErrors(r.pbi)).toEqual([]);
+  });
+
+  it('after "Add a payer filter" and "Add a time period filter" the export is exactly the full FRM report', () => {
+    let spec = r.build.spec;
+    for (const cmd of ['Add a payer filter', 'Add a time period filter']) spec = applyDesignCommand(spec, cmd, { u: r.u, f: r.f }).spec;
+    // the same pages, with the template's full filter panel (Time Period first, then every FRM filter)
+    const full: DashboardSpec = { ...r.build.spec, filters: [periodFilterDef(), ...buildFrmLayout(r.u, r.f)!.filters] };
+    const a = exportOf(spec);
+    const b = exportOf(full);
+    expect(Object.keys(a.files).sort()).toEqual(Object.keys(b.files).sort());
+    for (const p of Object.keys(b.files)) expect(a.files[p], p).toBe(b.files[p]);
+    expect(slicerHeaders(a)).toEqual(expect.arrayContaining(["'Time Period'", "'Custom Date'", "'Payer'"]));
   });
 });
 

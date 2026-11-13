@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend, ScatterChart, Scatter, LabelList } from 'recharts';
 import { ArrowDownRight, ArrowUpRight, Minus, Download, Search, ChevronDown, X, ArrowUpDown, Layers, Maximize2, Info, Flag, ChevronRight, FilterX, CalendarDays, TrendingUp, SearchCheck, ListChecks, type LucideIcon } from 'lucide-react';
 import type { DashComponent, DashboardSpec, FieldRef, Foundation, MeasureDef, PeriodPreset } from '@/types';
@@ -11,6 +11,7 @@ import { CLIENT_THEME, PALETTE, fmtMeasure } from './format';
 import BrandLogo from '@/components/BrandLogo';
 import { fieldLabel } from '@/lib/fieldLabels';
 import { followGeo, geoName } from '@/lib/geoLevel';
+import { activePeriod, hasPeriodFilter } from '@/lib/periodFilter';
 
 interface Ctx {
   engine: Engine;
@@ -24,7 +25,11 @@ interface Ctx {
 
 export default function DashboardView({ spec, engine, foundation, fullscreen, header, locked }: { spec: DashboardSpec; engine: Engine; foundation: Foundation; fullscreen?: boolean; header?: ReactNode; locked?: { field: FieldRef; values: string[]; user: string } }) {
   const [pageId, setPageId] = useState(spec.pages[0]?.id);
-  const [f, setF] = useState<FilterState>({ period: spec.defaultPeriod, selections: {} });
+  // without a Time Period filter the dashboard shows all time; adding the filter switches to its default period
+  const withPeriod = hasPeriodFilter(spec);
+  const opening = activePeriod(spec);
+  const [f, setF] = useState<FilterState>({ period: opening, selections: {} });
+  useEffect(() => setF((s) => (s.period === opening ? s : { ...s, period: opening, custom: undefined })), [opening]);
   const [geo, setGeo] = useState<FieldRef | undefined>(spec.geoLevels?.default);
   const page0 = spec.pages.find((p) => p.id === pageId) ?? spec.pages[0];
   const geoHere = !!(spec.geoLevels && page0 && spec.geoLevels.pages.includes(page0.id));
@@ -94,11 +99,11 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
                 {locked?.values.length && x.field === locked.field ? <div className="input truncate bg-slate-50 py-1.5 text-xs text-slate-500">{locked.values.join(', ')}</div> : <MultiFilter label={x.label || fieldLabel(foundation, x.field!)} options={engine.distinct(x.field!)} value={f.selections[x.field!] ?? []} onChange={(v) => setF({ ...f, selections: { ...f.selections, [x.field!]: v } })} />}
               </Labeled>
             ))}
-            <PeriodFilter value={f.period} custom={f.custom} shown={current ?? { start: engine.minDate, end: engine.anchor }} onChange={(period, custom) => setF({ ...f, period, custom })} />
+            {withPeriod && <PeriodFilter value={f.period} custom={f.custom} shown={current ?? { start: engine.minDate, end: engine.anchor }} onChange={(period, custom) => setF({ ...f, period, custom })} />}
           </div>
           <div className="flex shrink-0 items-center gap-1 pt-5">
             <span className="rounded p-1 text-brand-700" title={`Period: ${fmtPeriod(current)}${previous ? ` · compared with ${fmtPeriod(previous)}` : ''}`}><Info className="h-4 w-4" /></span>
-            <button className="rounded p-1 text-brand-700 hover:bg-white" onClick={() => setF({ period: spec.defaultPeriod, selections: {} })} title="Clear all filters" aria-label="Reset">
+            <button className="rounded p-1 text-brand-700 hover:bg-white" onClick={() => setF({ period: opening, selections: {} })} title="Clear all filters" aria-label="Reset">
               <FilterX className="h-4 w-4" />
             </button>
           </div>

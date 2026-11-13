@@ -6,6 +6,7 @@ import { CHART_LABELS } from './designAgent';
 import { fieldLabel } from '@/lib/fieldLabels';
 import { detectRoster } from '@/lib/access';
 import { FEATURES } from '@/config/features';
+import { activePeriod, hasPeriodFilter } from '@/lib/periodFilter';
 
 /** Testing & UAT Agent: derives Functional Testing cases and Data Validation (business QC) scenarios from the generated dashboard. */
 
@@ -18,7 +19,7 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
   const label = (id: string) => u.profiles.find((p) => p.datasetId === id)?.label ?? id;
   const tech: Draft[] = [];
   const qc: Draft[] = [];
-  const pre = `Dashboard v${build.version} generated; default period ${PERIOD_LABELS[spec.defaultPeriod]}; no filters applied unless stated.`;
+  const pre = `Dashboard v${build.version} generated; default period ${PERIOD_LABELS[activePeriod(spec)]}; no filters applied unless stated.`;
   const dsOf = (c: DashComponent) => [...new Set(c.measureIds.map((m) => f.measures.find((x) => x.id === m)).flatMap((m) => (m?.datasetId ? [m.datasetId] : f.measures.filter((x) => x.id === m?.numeratorId || x.id === m?.denominatorId).map((x) => x.datasetId!))))].map(label).join(', ');
   const ELEMENT: Record<string, string> = { kpi: 'KPI Card', bar: 'Bar Chart', hbar: 'Bar Chart', stacked: 'Stacked Bar Chart', line: 'Line Chart', area: 'Area Chart', donut: 'Donut Chart', table: 'Table', kpiGroup: 'KPI Card', extremes: 'KPI Card', records: 'Case List', scatter: 'Scatter Plot', drilldown: 'Decomposition Tree', Filter: 'Filter', Page: 'Page Tab' };
   const add = (category: 'Interactivity' | 'Functional' | 'UI/UX', page: DashPage | null, element: string, elementType: string, steps: string[], expected: string, check: CheckSpec | null, priority: Priority = 'High', testData = 'Generated dashboard') =>
@@ -189,7 +190,7 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
   }
   if (FEATURES.rowLevelSecurity && detectRoster(u)) qcAdd('Access Control', 'Row-level security', 'Confirm each FRM sees only their authorised territory data', 'Users see only authorised rows and their numbers reconcile', { kind: 'rls' }, 'Critical');
   qcAdd('Filter Functionality', 'Filters', 'Apply multiple filters and verify all sections update', 'All relevant visuals update correctly', { kind: 'multi_filter' }, 'High');
-  qcAdd('Default Behavior', 'Filters', 'Validate the default reporting period', `Default period is ${PERIOD_LABELS[spec.defaultPeriod]} anchored on the latest data date`, { kind: 'default_period' }, 'Medium');
+  if (hasPeriodFilter(spec)) qcAdd('Default Behavior', 'Filters', 'Validate the default reporting period', `Default period is ${PERIOD_LABELS[spec.defaultPeriod]} anchored on the latest data date`, { kind: 'default_period' }, 'Medium');
   for (const r of (req?.rules ?? []).slice(0, 4)) qcAdd('Business Rule', 'Requirements', `Confirm business rule: ${r.text}`, 'Dashboard behaviour is consistent with the agreed rule', null, 'Medium');
 
   const mk = (d: Draft, id: string): TestCase => ({ ...d, id, actual: '', status: 'Not Started', evidence: '', comments: [], attachments: [], runCount: 0 });

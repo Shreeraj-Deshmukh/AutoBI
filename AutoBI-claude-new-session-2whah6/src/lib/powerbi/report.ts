@@ -4,6 +4,7 @@ import { PERIOD_LABELS } from '@/lib/dates';
 import { fieldLabel } from '@/lib/fieldLabels';
 import { CLIENT_THEME } from '@/dashboard/format';
 import { LOGO_FILE } from './theme';
+import { hasPeriodFilter } from '@/lib/periodFilter';
 import { axisOf, isMatrix } from '@/lib/engine';
 import { DATE_TABLE, PERIOD_COLUMN, PERIOD_PRESETS, PERIOD_TABLE, addFieldParameter, formatOf, type PbiModel } from './model';
 import { daxCol, daxMeasure, daxString, pbirString, shortId } from './names';
@@ -586,7 +587,8 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     const fieldsCol: FieldExpr = { table: ctx.geo.param.table, property: `${ctx.geo.param.property} Fields`, kind: 'Column' };
     slicers.push({ json: slicer(ctx.geo.param, { mode: 'Dropdown', single: true, header: 'Geo Level', ...(def ? { selected: daxCol(def.table, def.property), selectOn: fieldsCol } : {}) }), width: 170 });
   }
-  if (ctx.model.hasDates) {
+  // Time Period + Custom Date slicers only when the dashboard has the Time Period filter (otherwise it shows all time)
+  if (ctx.model.hasDates && hasPeriodFilter(ctx.spec)) {
     const preset = PERIOD_PRESETS.includes(ctx.spec.defaultPeriod) ? PERIOD_LABELS[ctx.spec.defaultPeriod] : undefined;
     slicers.push({ json: slicer({ table: PERIOD_TABLE, property: PERIOD_COLUMN, kind: 'Column' }, { mode: 'Dropdown', single: true, selected: preset, header: 'Time Period' }), width: 220 });
     slicers.push({ json: slicer({ table: DATE_TABLE, property: 'Date', kind: 'Column' }, { mode: 'Between', header: 'Custom Date' }), width: 260 });

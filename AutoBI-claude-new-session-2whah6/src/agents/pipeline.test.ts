@@ -10,6 +10,7 @@ import { generateTests } from './testingAgent';
 import { runCheck } from './validators';
 import { Engine, axisOf } from '@/lib/engine';
 import { followGeo } from '@/lib/geoLevel';
+import { activePeriod } from '@/lib/periodFilter';
 import { buildMeasureFromText } from './kpiBuilder';
 import { proposeRelease } from '@/lib/access';
 import { seeded } from '@/lib/util';
@@ -266,8 +267,30 @@ describe('Sanofi FRM case view (ProcDNA FRM report + KPI catalogue)', () => {
     expect(shape('Case Closure Rate')).toEqual(['bar', undefined, 'month', 'Product_Name', 'Region']);
     expect(shape('Case Load vs Resolution Time')).toEqual(['scatter', 'Region', undefined, undefined, 'Product_Name']);
     expect(r.design.geoLevels).toMatchObject({ fields: ['frm_territories::Region', 'frm_territories::Territory_Name'], default: 'frm_territories::Region', pages: [p2.id] });
-    expect(r.design.filters.filter((x) => x.type === 'multi').map((x) => x.field?.split('::')[1])).toEqual(['Region', 'Territory_Name', 'Sales_Territory', 'Market', 'Product_Name', 'Institution', 'PBM', 'Payer']);
+    // demo storyline (FEATURES.frmHeldBackFilters): Payer and Time Period are held back for the presenter to add
+    expect(r.design.filters.map((x) => x.field?.split('::')[1] ?? x.type)).toEqual(['Region', 'Territory_Name', 'Sales_Territory', 'Market', 'Product_Name', 'Institution', 'PBM']);
     expect(r.build.validations.every((v) => v.ok)).toBe(true);
+  });
+  it('demo storyline: the design assistant adds the held-back Payer and Time Period filters', () => {
+    // without a Time Period filter the dashboard shows all time
+    expect(activePeriod(r.design)).toBe('all');
+    let spec = r.design;
+    const say = (cmd: string) => {
+      const e = applyDesignCommand(spec, cmd, { u: r.u, f: r.f });
+      expect(e.changed).toBe(true);
+      spec = e.spec;
+      return e.reply;
+    };
+    expect(say('Add a payer filter')).toMatch(/Added a Payer filter/);
+    expect(say('Add a time period filter')).toMatch(/Time Period filter.*Year to date/);
+    // back to the full FRM report: Time Period first, Payer last, opening on year to date
+    expect(spec.filters.map((x) => x.field?.split('::')[1] ?? x.type)).toEqual(['period', 'Region', 'Territory_Name', 'Sales_Territory', 'Market', 'Product_Name', 'Institution', 'PBM', 'Payer']);
+    expect(spec.filters.map((x) => x.label)).toEqual(['Reporting Period', 'Region', 'FRM Territory', 'Sales Territory', 'Market', 'Product', 'Account', 'PBM Name', 'Payer']);
+    expect(activePeriod(spec)).toBe('ytd');
+    // both in one prompt works too
+    spec = r.design;
+    expect(say('Add payer and time period filters')).toMatch(/Payer.*Time Period/);
+    expect(spec.filters).toHaveLength(9);
   });
   it('geography charts split by product and follow the geo level', () => {
     const p2 = page('FRM Performance');

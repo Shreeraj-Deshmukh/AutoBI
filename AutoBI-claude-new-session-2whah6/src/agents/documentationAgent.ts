@@ -5,6 +5,7 @@ import { fmtDate, fmtDateTime, humanize } from '@/lib/util';
 import { CHART_LABELS } from './designAgent';
 import { AGENTS } from './registry';
 import { FEATURES } from '@/config/features';
+import { activePeriod } from '@/lib/periodFilter';
 
 /** Documentation Agent: consolidates project artifacts into the delivery documentation set. */
 
@@ -86,7 +87,7 @@ export function generateDocs(p: Project, version: number): DocArtifact[] {
   const spec = d?.spec ?? p.design?.spec;
   if (spec) {
     let md = header('Dashboard Functional Specification') + `**Design version:** v${p.design?.version ?? '—'} (${p.design?.status ?? '—'}${p.design?.approvedAt ? `, approved ${fmtDate(p.design.approvedAt)}` : ''})  \n**Dashboard build:** ${d ? `v${d.version} generated ${fmtDateTime(d.generatedAt)}` : 'not yet generated'}\n\n`;
-    md += `## Navigation\nThe dashboard has ${spec.pages.length} page(s) accessed via tabs: ${spec.pages.map((x) => x.name).join(' · ')}.\n\n## Global filters\n` + table(['Filter', 'Type', 'Field'], spec.filters.map((x) => [x.label, x.type === 'period' ? 'Date period' : 'Multi-select', x.field ? fieldName(x.field) : 'Activity dates'])) + `\nDefault period: ${PERIOD_LABELS[spec.defaultPeriod]}. Default trend grain: ${spec.timeGrain}.\n\n`;
+    md += `## Navigation\nThe dashboard has ${spec.pages.length} page(s) accessed via tabs: ${spec.pages.map((x) => x.name).join(' · ')}.\n\n## Global filters\n` + table(['Filter', 'Type', 'Field'], spec.filters.map((x) => [x.label, x.type === 'period' ? 'Date period' : 'Multi-select', x.field ? fieldName(x.field) : 'Activity dates'])) + `\nDefault period: ${PERIOD_LABELS[activePeriod(spec)]}. Default trend grain: ${spec.timeGrain}.\n\n`;
     md += `## Interaction behaviour\n- Clicking a category in a bar/donut chart or a row in a table cross-filters every related visual; clicking again clears it.\n- KPI cards show current vs previous period change where enabled.\n- Tables support search, column sorting and CSV export.\n- Tooltips show category / period and formatted value.\n\n`;
     for (const pg of spec.pages) {
       md += `## Page: ${pg.name}\n${pg.description}\n\n` + table(['#', 'Component', 'Type', 'Measures', 'Dimension', 'Width (of 12)', 'Description'], pg.components.map((c, i) => [i + 1, c.title, CHART_LABELS[c.type], c.measureIds.map(mname).join(', '), c.dimension ? fieldName(c.dimension) + (c.series ? ` × ${splitRef(c.series).column}` : '') : c.timeGrain ? `Time (${c.timeGrain})` : '—', c.width, c.description])) + '\n';

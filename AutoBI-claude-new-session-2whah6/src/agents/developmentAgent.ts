@@ -1,5 +1,6 @@
 import type { ComponentValidation, DashboardBuild, DashboardSpec, DataUnderstanding, Foundation } from '@/types';
 import { Engine, axisOf, isMatrix, splitRef, emptyFilters } from '@/lib/engine';
+import { activePeriod } from '@/lib/periodFilter';
 import { designStats } from './designAgent';
 import { clone } from '@/lib/util';
 import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
@@ -8,7 +9,7 @@ import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
 
 export function validateComponents(spec: DashboardSpec, engine: Engine, foundation?: Foundation): ComponentValidation[] {
   const out: ComponentValidation[] = [];
-  const f = emptyFilters(spec.defaultPeriod);
+  const f = emptyFilters(activePeriod(spec));
   for (const p of spec.pages) {
     for (const c of p.components) {
       const v = (ok: boolean, message: string) => out.push({ componentId: c.id, title: c.title, page: p.name, ok, message });

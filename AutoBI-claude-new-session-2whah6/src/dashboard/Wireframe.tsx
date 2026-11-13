@@ -199,7 +199,7 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
           {spec.filters.filter((f) => f.type === 'multi').map((f) => (
             <span key={f.id} className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600" data-testid="wf-filter">{f.label || (f.field ? fieldLabel(foundation, f.field) : '')}: All<ChevronDown className="h-3 w-3" /></span>
           ))}
-          <span className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600"><Calendar className="h-3 w-3" />{PERIOD_LABELS[spec.defaultPeriod]}<ChevronDown className="h-3 w-3" /></span>
+          {spec.filters.some((x) => x.type === 'period') && <span className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600" data-testid="wf-period"><Calendar className="h-3 w-3" />{PERIOD_LABELS[spec.defaultPeriod]}<ChevronDown className="h-3 w-3" /></span>}
         </div>
       </div>
       <div className="grid gap-3 p-4" style={{ gridTemplateColumns: 'repeat(60, minmax(0, 1fr))' }} onDragOver={(e) => dragId && e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (dragId && !overId) move(dragId, page.id, null); setDragId(null); setOverId(null); }}>

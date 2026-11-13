@@ -7,6 +7,9 @@ import { conditionsOf } from '@/lib/conditions';
 import { reachable } from './dataAgent';
 import { buildFrmLayout } from './frmTemplate';
 import { isCatalogueHelper } from '@/lib/catalogue';
+import { FEATURES } from '@/config/features';
+import { periodFilterDef } from '@/lib/periodFilter';
+import { PERIOD_LABELS } from '@/lib/dates';
 
 /** Dashboard Design Agent: generates and edits a configuration-driven wireframe. */
 
@@ -208,8 +211,10 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
   }
   // the FRM report opens on calendar year to date
   const preset = frm ? 'ytd' : grain === 'week' ? 'r13w' : grain === 'month' ? 'last6m' : 'last12m';
-  // the FRM report has a fixed filter panel (ProcDNA FRM report layout)
-  return { pages, filters: frm ? filters.slice(0, 1 + frm.filters.length) : filters, defaultPeriod: preset, timeGrain: grain, ...(frm?.geoLevels ? { geoLevels: frm.geoLevels } : {}) };
+  // the FRM report has a fixed filter panel (ProcDNA FRM report layout); in the demo storyline the Time Period
+  // filter can be held back for the presenter to add ("Add a time period filter") – it keeps its default period
+  const frmFilters = filters.slice(0, 1 + (frm?.filters.length ?? 0)).filter((x) => x.type !== 'period' || !FEATURES.frmHeldBackFilters.includes('period'));
+  return { pages, filters: frm ? frmFilters : filters, defaultPeriod: preset, timeGrain: grain, ...(frm?.geoLevels ? { geoLevels: frm.geoLevels } : {}) };
 }
 
 // ───────────────────────── Funnel-style overview ─────────────────────────
@@ -356,14 +361,35 @@ export function applyDesignCommand(input: DashboardSpec, command: string, ctx0: 
     spec.filters = spec.filters.filter((x) => x.id !== f.id);
     return { spec, changed: true, reply: `Removed the ${f.label} filter.` };
   }
-  m = /add (?:an? )?(.+?) (?:filter|slicer)/i.exec(cmd);
+  // "Add a payer filter", "Add a time period filter", "Add payer and time period filters"
+  m = /add (?:an? |the )?(.+?) (?:filters?|slicers?)\b/i.exec(cmd);
   if (m) {
-    const fm = findField(m[1], ctx.u.profiles, { roles: ['dimension', 'status', 'attribute', 'foreign_key'] });
-    if (!fm) return no(`I couldn't find a field for "${m[1]}" in the data, so I can't add that filter.`);
-    const r = ref(fm.datasetId, fm.column);
-    if (spec.filters.some((x) => x.field === r)) return no(`A ${dimLabel(r)} filter already exists.`);
-    spec.filters.push({ id: uid('flt'), label: dimLabel(r), type: 'multi', field: r });
-    return { spec, changed: true, reply: `Added a ${dimLabel(r)} filter (from ${fm.profile.label}.${fm.column}).` };
+    const replies: string[] = [];
+    const problems: string[] = [];
+    for (const part of m[1].split(/\s*(?:,|\band\b|&)\s*(?:an? |the )?/i).filter(Boolean)) {
+      // Time Period (preset + Custom Date): the dashboard's period filter, always first, opening on the default period
+      if (/^(?:(?:time|reporting|date)\s*)?(?:period|date(?:\s*range)?|time)$/i.test(part.trim())) {
+        if (spec.filters.some((x) => x.type === 'period')) problems.push('A Time Period filter already exists.');
+        else {
+          spec.filters.unshift(periodFilterDef());
+          replies.push(`Added the Time Period filter (with Custom Date), opening on ${PERIOD_LABELS[spec.defaultPeriod]}.`);
+        }
+        continue;
+      }
+      const fm = findField(part, ctx.u.profiles, { roles: ['dimension', 'status', 'attribute', 'foreign_key'] });
+      if (!fm) {
+        problems.push(`I couldn't find a field for "${part}" in the data, so I can't add that filter.`);
+        continue;
+      }
+      const r = ref(fm.datasetId, fm.column);
+      if (spec.filters.some((x) => x.field === r)) {
+        problems.push(`A ${dimLabel(r)} filter already exists.`);
+        continue;
+      }
+      spec.filters.push({ id: uid('flt'), label: dimLabel(r), type: 'multi', field: r });
+      replies.push(`Added a ${dimLabel(r)} filter (from ${fm.profile.label}.${fm.column}).`);
+    }
+    return replies.length ? { spec, changed: true, reply: [...replies, ...problems].join(' ') } : no(problems.join(' '));
   }
 
   // replace/change chart type

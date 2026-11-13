@@ -4,6 +4,7 @@ import { catalogueTables } from '@/lib/catalogue';
 import { fieldLabel, visibleProfiles } from '@/lib/fieldLabels';
 import { uid } from '@/lib/util';
 import { reachable } from './dataAgent';
+import { FEATURES } from '@/config/features';
 
 /**
  * ProcDNA FRM report template (Field Reimbursement Management + FRM Performance),
@@ -134,7 +135,9 @@ export function buildFrmLayout(u0: DataUnderstanding, f: Foundation): FrmLayout 
   ];
   // filter panel of the ProcDNA FRM report
   const filters: FilterDef[] = [];
-  const F = (field: FieldRef | undefined, label?: string) => field && !filters.some((x) => x.field === field) && filters.push({ id: uid('flt'), label: label ?? fieldLabel(f, field), type: 'multi', field });
+  // demo storyline: some filters are held back for the presenter to add with the design assistant
+  const held = (label: string) => FEATURES.frmHeldBackFilters.some((h) => h.toLowerCase() === label.toLowerCase() || (h.toLowerCase() === 'pbm' && label === 'PBM Name'));
+  const F = (field: FieldRef | undefined, label?: string) => field && !held(label ?? '') && !filters.some((x) => x.field === field) && filters.push({ id: uid('flt'), label: label ?? fieldLabel(f, field), type: 'multi', field });
   F(region, 'Region');
   F(territory, 'FRM Territory');
   F(salesTerritory, 'Sales Territory');

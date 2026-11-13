@@ -5,6 +5,7 @@ import { rowsVersion } from '@/lib/rowStore';
 import { bucketOf, fmtPeriod, parseDate, previousPeriod, resolvePeriod, toIsoDate, type Period } from '@/lib/dates';
 import { bindCatalogue } from '@/lib/catalogue';
 import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
+import { activePeriod } from '@/lib/periodFilter';
 
 /**
  * Independent validators used by the Testing Agent.
@@ -143,7 +144,8 @@ const additive = (ctx: Ctx, id: string) => {
   const m = ctx.measures.find((x) => x.id === id);
   return !!m && (m.kind === 'count' || m.kind === 'sum');
 };
-const defaults = (ctx: Ctx): FilterState => ({ period: ctx.spec.defaultPeriod, selections: {} });
+// the period the dashboard opens on (all time when it has no Time Period filter)
+const defaults = (ctx: Ctx): FilterState => ({ period: activePeriod(ctx.spec), selections: {} });
 const pass = (actual: string, evidence: string): CheckResult => ({ status: 'Passed', actual, evidence });
 const fail = (actual: string, evidence: string): CheckResult => ({ status: 'Failed', actual, evidence });
 
@@ -328,10 +330,11 @@ export function runCheck(check: CheckSpec, ctx: Ctx): CheckResult {
       return ok ? pass('Previous period has equal length, is adjacent, and values reconcile', lines.join('\n')) : fail('Period comparison logic inconsistent', lines.join('\n'));
     }
     case 'default_period': {
-      const p = resolvePeriod(ctx.spec.defaultPeriod, E.anchor, E.minDate);
+      const period = activePeriod(ctx.spec);
+      const p = resolvePeriod(period, E.anchor, E.minDate);
       const maxDate = Math.max(...ctx.u.profiles.filter((x) => x.kind === 'activity' && x.dateField).map((x) => parseDate(x.columns.find((c) => c.name === x.dateField)!.dateMax!)!.t));
       const ok = (!p || p.end === maxDate) && E.anchor === maxDate;
-      return ok ? pass(`Default period "${ctx.spec.defaultPeriod}" resolves to ${fmtPeriod(p)}`, `Anchor = latest activity date ${toIsoDate(maxDate)}.`) : fail('Default period not anchored to latest data date', `Anchor ${toIsoDate(E.anchor)} vs data max ${toIsoDate(maxDate)}.`);
+      return ok ? pass(`Default period "${period}" resolves to ${fmtPeriod(p)}`, `Anchor = latest activity date ${toIsoDate(maxDate)}.`) : fail('Default period not anchored to latest data date', `Anchor ${toIsoDate(E.anchor)} vs data max ${toIsoDate(maxDate)}.`);
     }
     case 'fk_integrity': {
       const r = ctx.u.relationships.find((x) => x.id === check.relationshipId);
