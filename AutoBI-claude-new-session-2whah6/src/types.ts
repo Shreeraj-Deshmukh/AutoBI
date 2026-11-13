@@ -368,8 +368,15 @@ export interface DashComponent {
   description: string;
   measureIds: string[];
   dimension?: FieldRef; // for bar/donut/stacked/table group
-  series?: FieldRef; // for stacked
-  timeGrain?: TimeGrain; // for line/area
+  /** bar / stacked / scatter: one bar segment (stacked), bar (bar) or point colour (scatter) per value of this field. */
+  series?: FieldRef;
+  /**
+   * line / area: the time grain. bar / stacked: the outer axis level is the period (e.g. month) of the measure's date,
+   * with `subDimension` inside it and no `dimension`.
+   */
+  timeGrain?: TimeGrain;
+  /** bar / stacked: inner axis level under `dimension` (or under the period), e.g. Product within Territory. */
+  subDimension?: FieldRef;
   comparison?: boolean; // KPI current vs previous
   width: 3 | 4 | 6 | 8 | 12;
   tableColumns?: FieldRef[]; // attribute columns for tables
@@ -387,7 +394,7 @@ export interface DashComponent {
   /** table: priority flags on the first measure (≥ high → two flags, ≥ medium → one flag). Thresholds left out follow the data: top 10% → two flags, next 25% → one flag. */
   flags?: { high?: number; medium?: number };
   /** records: optional toggle that narrows the list (e.g. escalated cases only). */
-  toggle?: { label: string; filter: MeasureCondition[] };
+  toggle?: { label: string; filter: MeasureCondition[]; /** name of the un-narrowed view, e.g. "Overall Cases" (default "All") */ allLabel?: string };
   /** records: column the list is sorted by, descending. */
   sortBy?: FieldRef;
   /** drilldown: hierarchy levels, outermost first. `dimension` mirrors levels[0]. */
@@ -415,6 +422,12 @@ export interface DashboardSpec {
   filters: FilterDef[];
   defaultPeriod: PeriodPreset;
   timeGrain: TimeGrain;
+  /**
+   * "Geo Level" selector: geography fields, broadest first (e.g. Region, Territory). On pages that show it,
+   * every component whose `dimension` or `series` is one of these fields follows the selected level.
+   * Exported to Power BI as a field parameter.
+   */
+  geoLevels?: { fields: FieldRef[]; default: FieldRef; pages: string[] };
 }
 
 export interface DesignState {

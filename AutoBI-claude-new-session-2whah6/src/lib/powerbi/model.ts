@@ -26,6 +26,10 @@ export interface PbiColumn {
   description?: string;
   formatString?: string;
   sortByColumn?: string;
+  /** Field parameter: the column whose values group this one (the display column of the parameter). */
+  groupByColumn?: string;
+  /** Field parameter: this column holds the NAMEOF() field references. */
+  parameterFields?: boolean;
 }
 
 export interface PbiMeasure {
@@ -44,11 +48,41 @@ export interface PbiTable {
   description: string;
   columns: PbiColumn[];
   measures: PbiMeasure[];
-  /** Power Query (M) expression of the import partition. */
+  /** Power Query (M) expression of the import partition, or the DAX expression of a calculated table. */
   source: string;
+  /** The partition is a DAX calculated table (field parameters), not a Power Query import. */
+  calculated?: boolean;
   /** Column filtered by the reporting period (activity tables). */
   dateColumn?: string;
-  kind: 'fact' | 'dimension' | 'date' | 'period';
+  kind: 'fact' | 'dimension' | 'date' | 'period' | 'parameter';
+}
+
+/**
+ * Field parameter (e.g. "Geo Level": Region / Territory): a calculated table whose selection swaps the field a visual
+ * groups by. Columns: display name, NAMEOF() field reference, order. Returns the table name, or null when a field is not in the model.
+ */
+export function addFieldParameter(model: PbiModel, name: string, fields: { label: string; ref: FieldRef }[]): { table: string; display: string; order: string } | null {
+  const cols = fields.map((f) => ({ label: f.label, col: model.col(f.ref) }));
+  if (cols.some((c) => !c.col)) return null;
+  const table = model.names.take(cleanName(name, 'Parameter'), ' (Parameter)');
+  const display = table;
+  const fieldsCol = `${table} Fields`;
+  const order = `${table} Order`;
+  model.tables.push({
+    name: table,
+    datasetId: null,
+    description: `Field parameter: choose which field the visuals group by (${fields.map((f) => f.label).join(' / ')}).`,
+    kind: 'parameter',
+    calculated: true,
+    columns: [
+      { name: display, dataType: 'string', source: '[Value1]', sortByColumn: order, groupByColumn: fieldsCol },
+      { name: fieldsCol, dataType: 'string', source: '[Value2]', hidden: true, sortByColumn: order, parameterFields: true },
+      { name: order, dataType: 'int64', source: '[Value3]', hidden: true, formatString: '0' },
+    ],
+    measures: [],
+    source: ['{', cols.map((c, i) => `\t(${daxString(c.label)}, NAMEOF(${daxCol(c.col!.table, c.col!.column)}), ${i})`).join(',\n'), '}'].join('\n'),
+  });
+  return { table, display, order };
 }
 
 export interface PbiRelationship {
@@ -148,7 +182,8 @@ function dataTypeOf(p: DatasetProfile, column: string, rows: Row[], forceText: b
     case 'date':
       return 'dateTime';
     case 'boolean':
-      return 'boolean';
+      // flags written as text (Y / N, Yes / No) stay text so the report shows them as in the data
+      return rows.some((r) => typeof r[column] === 'string') ? 'string' : 'boolean';
     default:
       return 'string';
   }

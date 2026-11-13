@@ -1,5 +1,5 @@
 import type { ComponentValidation, DashboardBuild, DashboardSpec, DataUnderstanding, Foundation } from '@/types';
-import { Engine, splitRef, emptyFilters } from '@/lib/engine';
+import { Engine, axisOf, isMatrix, splitRef, emptyFilters } from '@/lib/engine';
 import { designStats } from './designAgent';
 import { clone } from '@/lib/util';
 import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
@@ -17,23 +17,22 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
         v(false, missing.length ? `KPI definition(s) no longer exist in the reporting foundation.` : 'No measure bound to this component.');
         continue;
       }
-      const excluded = [...new Set([c.dimension, c.series, ...(c.tableColumns ?? []), ...(c.levels ?? [])])].filter((x): x is string => !!x && !fieldIncluded(foundation, x));
+      const excluded = [...new Set([c.dimension, c.subDimension, c.series, ...(c.tableColumns ?? []), ...(c.levels ?? [])])].filter((x): x is string => !!x && !fieldIncluded(foundation, x));
       if (excluded.length) {
         v(false, `Uses ${excluded.map((x) => fieldLabel(foundation, x)).join(', ')}, which is excluded in Field Mapping. Include the field or change the visual.`);
         continue;
       }
-      if (c.dimension) {
-        const { datasetId, column } = splitRef(c.dimension);
-        const prof = engine.profile(datasetId);
-        if (!prof?.columns.some((x) => x.name === column)) {
-          v(false, `Dimension field ${column} is not available in the data.`);
-          continue;
-        }
-        const unreachable = c.measureIds.filter((m) => !engine.applies(m, c.dimension!));
-        if (unreachable.length) {
-          v(false, `No relationship links ${column} to ${unreachable.map((m) => engine.measures.get(m)!.name).join(', ')}.`);
-          continue;
-        }
+      // category fields (axis levels; series of a matrix bar chart / scatter) must exist and reach every measure
+      const dims = [c.dimension, ...(isMatrix(c) || c.type === 'scatter' ? [c.subDimension, c.series] : [])].filter((x): x is string => !!x);
+      const bad = dims.map((d) => {
+        const { datasetId, column } = splitRef(d);
+        if (!engine.profile(datasetId)?.columns.some((x) => x.name === column)) return `Dimension field ${column} is not available in the data.`;
+        const unreachable = c.measureIds.filter((m) => !engine.applies(m, d));
+        return unreachable.length ? `No relationship links ${column} to ${unreachable.map((m) => engine.measures.get(m)!.name).join(', ')}.` : null;
+      }).find(Boolean);
+      if (bad) {
+        v(false, bad);
+        continue;
       }
       // fields shown beside the measure (case list columns, drilldown levels) must be reachable from its data
       const extra = [...(c.levels ?? []), ...(c.type === 'records' ? c.tableColumns ?? [] : [])];
@@ -73,6 +72,9 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
         } else if (c.type === 'line' || c.type === 'area') {
           const s = engine.series(c.measureIds[0], c.timeGrain ?? spec.timeGrain, f);
           v(s.length > 0, s.length ? `${s.length} ${c.timeGrain ?? spec.timeGrain} buckets.` : 'No dated rows in the default period.');
+        } else if (isMatrix(c)) {
+          const g = engine.matrix(c.measureIds[0], axisOf(c), c.series, f);
+          v(g.rows.length > 0, g.rows.length ? `${g.rows.length} axis positions${c.series ? ` × ${g.series.length} series` : ''}.` : 'No data for the default period.');
         } else if (c.type === 'stacked') {
           if (!c.series) v(false, 'Stacked chart requires a series field.');
           else {

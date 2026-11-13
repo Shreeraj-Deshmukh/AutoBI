@@ -30,15 +30,15 @@ export default function DashboardPreview() {
       locked={viewer && p.release?.securityField && viewer.values.length ? { field: p.release.securityField, values: viewer.values, user: viewer.name } : undefined}
       header={
         <div className="flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-2 text-white no-print">
-          <Link to={`/p/${p.id}/development`} className="flex items-center gap-1 text-xs text-blue-100 hover:text-white"><ArrowLeft className="h-3.5 w-3.5" />Back to Celestra</Link>
+          <Link to={`/p/${p.id}/development`} className="flex items-center gap-1 text-xs text-brand-100 hover:text-white"><ArrowLeft className="h-3.5 w-3.5" />Back to Celestra</Link>
           <div className="h-5 w-px bg-white/20" />
           <Logo compact />
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">{p.info.name}</div>
-            <div className="text-[0.625rem] text-blue-200/80">Dashboard v{p.dashboard.version} · design v{p.dashboard.designVersion} · generated {fmtDateTime(p.dashboard.generatedAt)}</div>
+            <div className="text-[0.625rem] text-brand-200/80">Dashboard v{p.dashboard.version} · design v{p.dashboard.designVersion} · generated {fmtDateTime(p.dashboard.generatedAt)}</div>
           </div>
           {FEATURES.rowLevelSecurity && p.release?.users.length ? (
-            <label className="ml-auto flex items-center gap-1.5 text-xs text-blue-100">
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-brand-100">
               <ShieldCheck className="h-3.5 w-3.5" /> View as
               <select className="rounded-md border border-white/20 bg-navy-800 px-2 py-1 text-xs text-white" value={viewer?.id ?? ''} onChange={(e) => setParams(e.target.value ? { as: e.target.value } : {})} aria-label="View as user">
                 <option value="">Full access</option>

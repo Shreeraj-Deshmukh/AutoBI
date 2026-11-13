@@ -98,7 +98,7 @@ export default function ConnectSource({ pid, onClose }: { pid: string; onClose: 
       <div className="grid gap-3 sm:grid-cols-2">
         {(['databricks', 'snowflake'] as const).map((pv) => (
           <button key={pv} onClick={() => setProvider(pv)} className={cx('flex items-center gap-3 rounded-lg border p-3 text-left transition', provider === pv ? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500' : 'border-slate-200 hover:border-slate-300')}>
-            <span className={cx('flex h-9 w-9 items-center justify-center rounded-lg', pv === 'databricks' ? 'bg-orange-50 text-orange-600' : 'bg-sky-50 text-sky-600')}>{pv === 'databricks' ? <Database className="h-4.5 w-4.5 h-[1.125rem] w-[1.125rem]" /> : <Snowflake className="h-[1.125rem] w-[1.125rem]" />}</span>
+            <span className={cx('flex h-9 w-9 items-center justify-center rounded-lg', pv === 'databricks' ? 'bg-orange-50 text-orange-600' : 'bg-brand-50 text-brand-600')}>{pv === 'databricks' ? <Database className="h-4.5 w-4.5 h-[1.125rem] w-[1.125rem]" /> : <Snowflake className="h-[1.125rem] w-[1.125rem]" />}</span>
             <span>
               <span className="block text-sm font-semibold text-navy-900">{pv === 'databricks' ? 'Databricks' : 'Snowflake'}</span>
               <span className="block text-[0.6875rem] text-slate-500">{pv === 'databricks' ? 'Unity Catalog via SQL warehouse' : 'Tables via the Snowflake SQL API'}</span>

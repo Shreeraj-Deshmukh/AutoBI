@@ -255,15 +255,15 @@ function ModelDiagram({ p }: { p: Project }) {
         const x1 = pos[a.id].x + BW / 2, y1 = pos[a.id].y, x2 = pos[b.id].x + BW / 2, y2 = pos[b.id].y + BH;
         return (
           <g key={r.id}>
-            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={hl ? '#2550eb' : '#94a3b8'} strokeWidth={hl ? 2.5 : 1.5} strokeDasharray={r.status === 'suggested' ? '5 4' : undefined} markerEnd="url(#arrow)" />
-            <text x={(x1 + x2) / 2 + 6} y={(y1 + y2) / 2} fontSize="10" fill={hl ? '#1d3fd8' : '#64748b'} fontFamily="ui-monospace,monospace">{r.fromField} ∞:1</text>
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={hl ? '#7a00e6' : '#94a3b8'} strokeWidth={hl ? 2.5 : 1.5} strokeDasharray={r.status === 'suggested' ? '5 4' : undefined} markerEnd="url(#arrow)" />
+            <text x={(x1 + x2) / 2 + 6} y={(y1 + y2) / 2} fontSize="10" fill={hl ? '#6400bd' : '#64748b'} fontFamily="ui-monospace,monospace">{r.fromField} ∞:1</text>
           </g>
         );
       })}
       {[...tables, ...derived].map((t) => pos[t.id] && (
         <g key={t.id} transform={`translate(${pos[t.id].x},${pos[t.id].y})`} onPointerDown={(e) => { const q = pt(e); drag.current = { id: t.id, dx: q.x - pos[t.id].x, dy: q.y - pos[t.id].y }; (e.target as Element).setPointerCapture?.(e.pointerId); }} onPointerEnter={() => setHover(t.id)} onPointerLeave={() => setHover(null)} className="cursor-move">
-          <rect width={BW} height={BH} rx="8" fill={t.kind === 'fact' ? '#eef4ff' : '#f5f3ff'} stroke={hover === t.id ? '#2550eb' : t.kind === 'fact' ? '#93b4fd' : '#c4b5fd'} strokeWidth={hover === t.id ? 2 : 1} strokeDasharray={t.sourceDatasetId && t.name !== 'Dim_Geography' ? undefined : '4 3'} />
-          <text x="10" y="19" fontSize="12" fontWeight="600" fill="#0f1f42" fontFamily="ui-monospace,monospace">{t.name}</text>
+          <rect width={BW} height={BH} rx="8" fill={t.kind === 'fact' ? '#f6efff' : '#f5f3ff'} stroke={hover === t.id ? '#7a00e6' : t.kind === 'fact' ? '#bd8bff' : '#c4b5fd'} strokeWidth={hover === t.id ? 2 : 1} strokeDasharray={t.sourceDatasetId && t.name !== 'Dim_Geography' ? undefined : '4 3'} />
+          <text x="10" y="19" fontSize="12" fontWeight="600" fill="#171717" fontFamily="ui-monospace,monospace">{t.name}</text>
           <text x="10" y="35" fontSize="10" fill="#64748b">{t.kind === 'fact' ? 'Fact' : 'Dimension'} · {t.fields.length} fields{!t.sourceDatasetId || t.name === 'Dim_Geography' ? ' · derived' : ''}</text>
         </g>
       ))}

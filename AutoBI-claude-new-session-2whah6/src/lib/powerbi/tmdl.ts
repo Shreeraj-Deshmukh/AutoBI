@@ -32,7 +32,7 @@ function measureLines(table: string, m: PbiMeasure): string[] {
   ];
 }
 
-function columnLines(table: string, c: PbiColumn): string[] {
+function columnLines(table: string, c: PbiColumn, calculated = false): string[] {
   return [
     ...description(c.description, T),
     `${T}column ${tmdlName(c.name)}`,
@@ -41,8 +41,10 @@ function columnLines(table: string, c: PbiColumn): string[] {
     ...(c.formatString ? [`${T}${T}formatString: ${value(c.formatString)}`] : []),
     `${T}${T}lineageTag: ${guid(`column:${table}:${c.name}`)}`,
     `${T}${T}summarizeBy: none`,
-    `${T}${T}sourceColumn: ${value(c.name)}`,
+    `${T}${T}sourceColumn: ${calculated ? c.source : value(c.name)}`,
     ...(c.sortByColumn ? [`${T}${T}sortByColumn: ${tmdlName(c.sortByColumn)}`] : []),
+    ...(c.groupByColumn ? ['', `${T}${T}relatedColumnDetails`, `${T}${T}${T}groupByColumn: ${tmdlName(c.groupByColumn)}`] : []),
+    ...(c.parameterFields ? ['', `${T}${T}extendedProperty ParameterMetadata =`, `${T}${T}${T}${T}{`, `${T}${T}${T}${T}  "version": 3,`, `${T}${T}${T}${T}  "kind": 2`, `${T}${T}${T}${T}}`] : []),
     '',
     `${T}${T}annotation SummarizationSetBy = Automatic`,
     ...(c.dataType === 'dateTime' ? ['', `${T}${T}annotation UnderlyingDateTimeDataType = Date`] : []),
@@ -57,14 +59,13 @@ export function tableTmdl(t: PbiTable): string {
     `${T}lineageTag: ${guid(`table:${t.name}`)}`,
     '',
     ...t.measures.flatMap((m) => measureLines(t.name, m)),
-    ...t.columns.flatMap((c) => columnLines(t.name, c)),
-    `${T}partition ${tmdlName(t.name)} = m`,
+    ...t.columns.flatMap((c) => columnLines(t.name, c, t.calculated)),
+    `${T}partition ${tmdlName(t.name)} = ${t.calculated ? 'calculated' : 'm'}`,
     `${T}${T}mode: import`,
     `${T}${T}source =`,
     ...t.source.split('\n').map((l) => `${T}${T}${T}${T}${l}`),
     '',
-    `${T}annotation PBI_ResultType = Table`,
-    '',
+    ...(t.calculated ? [] : [`${T}annotation PBI_ResultType = Table`, '']),
   ];
   return lines.join('\n');
 }
@@ -98,7 +99,7 @@ export function modelTmdl(model: PbiModel): string {
     '',
     'annotation __PBI_TimeIntelligenceEnabled = 0',
     '',
-    `annotation PBI_QueryOrder = ${JSON.stringify(model.tables.map((t) => t.name))}`,
+    `annotation PBI_QueryOrder = ${JSON.stringify(model.tables.filter((t) => !t.calculated).map((t) => t.name))}`,
     '',
     'annotation PBI_ProTooling = ["DevMode"]',
     '',

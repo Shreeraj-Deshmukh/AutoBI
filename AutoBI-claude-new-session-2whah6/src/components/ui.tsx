@@ -51,7 +51,7 @@ export function Card({ title, subtitle, actions, children, className, bodyClass 
 
 const STAGE_STYLE: Record<StageStatus, [string, string]> = {
   not_started: ['Not Started', 'bg-slate-100 text-slate-600'],
-  in_progress: ['In Progress', 'bg-blue-50 text-blue-700'],
+  in_progress: ['In Progress', 'bg-brand-50 text-brand-700'],
   pending_approval: ['Pending Approval', 'bg-amber-50 text-amber-700'],
   approved: ['Approved', 'bg-emerald-50 text-emerald-700'],
   completed: ['Completed', 'bg-emerald-50 text-emerald-700'],
@@ -64,7 +64,7 @@ export function StageBadge({ status }: { status: StageStatus }) {
 
 const TEST_STYLE: Record<TestStatus, string> = {
   'Not Started': 'bg-slate-100 text-slate-600',
-  'In Progress': 'bg-blue-50 text-blue-700',
+  'In Progress': 'bg-brand-50 text-brand-700',
   Passed: 'bg-emerald-50 text-emerald-700',
   Failed: 'bg-red-50 text-red-700',
   Blocked: 'bg-orange-50 text-orange-700',
@@ -74,7 +74,7 @@ export const TestBadge = ({ status }: { status: TestStatus }) => <span className
 
 const MAP_STYLE: Record<MappingStatus, [string, string]> = {
   available: ['Available', 'bg-emerald-50 text-emerald-700'],
-  join_required: ['Join Required', 'bg-blue-50 text-blue-700'],
+  join_required: ['Join Required', 'bg-brand-50 text-brand-700'],
   calculation_required: ['Calculation Required', 'bg-violet-50 text-violet-700'],
   missing: ['Missing Data', 'bg-red-50 text-red-700'],
   clarification: ['Requires Clarification', 'bg-amber-50 text-amber-700'],
@@ -82,7 +82,7 @@ const MAP_STYLE: Record<MappingStatus, [string, string]> = {
 export const MapBadge = ({ status }: { status: MappingStatus }) => <span className={cx('chip', MAP_STYLE[status][1])}>{MAP_STYLE[status][0]}</span>;
 
 export function Badge({ children, tone = 'slate', className }: { children: ReactNode; tone?: 'slate' | 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'navy'; className?: string }) {
-  const t = { slate: 'bg-slate-100 text-slate-600', blue: 'bg-blue-50 text-blue-700', green: 'bg-emerald-50 text-emerald-700', amber: 'bg-amber-50 text-amber-700', red: 'bg-red-50 text-red-700', violet: 'bg-violet-50 text-violet-700', navy: 'bg-navy-800 text-white' }[tone];
+  const t = { slate: 'bg-slate-100 text-slate-600', blue: 'bg-brand-50 text-brand-700', green: 'bg-emerald-50 text-emerald-700', amber: 'bg-amber-50 text-amber-700', red: 'bg-red-50 text-red-700', violet: 'bg-violet-50 text-violet-700', navy: 'bg-navy-800 text-white' }[tone];
   return <span className={cx('chip', t, className)}>{children}</span>;
 }
 
@@ -162,7 +162,7 @@ export function Callout({ tone = 'info', title, children, action, dismissible = 
   const [hidden, setHidden] = useState(false);
   if (hidden) return null;
   const Icon = { info: Info, warning: AlertTriangle, error: XCircle, success: CheckCircle2 }[tone];
-  const c = { info: 'border-blue-200 bg-blue-50/60 text-blue-900', warning: 'border-amber-200 bg-amber-50/70 text-amber-900', error: 'border-red-200 bg-red-50/70 text-red-900', success: 'border-emerald-200 bg-emerald-50/70 text-emerald-900' }[tone];
+  const c = { info: 'border-brand-200 bg-brand-50/60 text-brand-900', warning: 'border-amber-200 bg-amber-50/70 text-amber-900', error: 'border-red-200 bg-red-50/70 text-red-900', success: 'border-emerald-200 bg-emerald-50/70 text-emerald-900' }[tone];
   return (
     <div className={cx('flex items-start gap-3 rounded-lg border px-3.5 py-2.5 text-sm', c)} role={tone === 'error' || tone === 'warning' ? 'alert' : 'status'}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
@@ -187,7 +187,7 @@ export function Toasts() {
     <div className="fixed bottom-4 right-4 z-[60] flex w-96 flex-col gap-2">
       {toasts.map((t) => (
         <div key={t.id} className={cx('card flex items-start gap-2 px-3 py-2.5 text-sm', t.kind === 'error' && 'border-red-200', t.kind === 'success' && 'border-emerald-200')}>
-          {t.kind === 'error' ? <XCircle className="mt-0.5 h-4 w-4 text-red-500" /> : t.kind === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" /> : <Info className="mt-0.5 h-4 w-4 text-blue-500" />}
+          {t.kind === 'error' ? <XCircle className="mt-0.5 h-4 w-4 text-red-500" /> : t.kind === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" /> : <Info className="mt-0.5 h-4 w-4 text-brand-500" />}
           <div className="flex-1 text-slate-700">{t.text}</div>
           <button onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-600" aria-label="Dismiss">
             <X className="h-3.5 w-3.5" />

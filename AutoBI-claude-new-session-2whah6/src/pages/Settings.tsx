@@ -49,7 +49,7 @@ export default function Settings() {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-amber-700"><AlertTriangle className="h-4 w-4" />{ai.status === 'offline' ? 'The AI proxy is not reachable (static hosting). Run Celestra with `npm run dev` or `npm run preview`.' : 'Not configured — agents run in deterministic mode.'}</div>
             <div className="text-sm text-slate-600">Create <code className="rounded bg-slate-100 px-1">.env.local</code> in the project root and restart the server:</div>
-            <pre className="overflow-x-auto rounded-lg bg-navy-950 p-3 text-xs text-blue-100">{`AZURE_AI_ENDPOINT=https://<resource>.services.ai.azure.com/models
+            <pre className="overflow-x-auto rounded-lg bg-navy-950 p-3 text-xs text-brand-100">{`AZURE_AI_ENDPOINT=https://<resource>.services.ai.azure.com/models
 AZURE_AI_API_KEY=<key from your Foundry project>
 AZURE_AI_MODEL=gpt-4o        # your deployment / model name`}</pre>
             <div className="text-xs text-slate-500">Azure OpenAI endpoints (<code>https://&lt;resource&gt;.openai.azure.com</code>) also work. The key stays on the server; the browser only talks to <code>/api/ai</code>.</div>

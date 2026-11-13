@@ -8,7 +8,8 @@ import { generateDesign, applyDesignCommand, designStats } from './designAgent';
 import { buildDashboard } from './developmentAgent';
 import { generateTests } from './testingAgent';
 import { runCheck } from './validators';
-import { Engine } from '@/lib/engine';
+import { Engine, axisOf } from '@/lib/engine';
+import { followGeo } from '@/lib/geoLevel';
 import { buildMeasureFromText } from './kpiBuilder';
 import { proposeRelease } from '@/lib/access';
 import { seeded } from '@/lib/util';
@@ -162,7 +163,7 @@ describe('Sanofi FRM patient funnel storyline', () => {
   it('step 1 – requirement becomes a specification with stories and KPIs', () => {
     expect(r.spec.stories.length).toBeGreaterThan(3);
     expect(r.spec.kpis.map((k) => k.text)).toEqual(expect.arrayContaining(['Patients awaiting PA', 'PA approval rate', 'Average time to therapy initiation', 'Patient drop-off rate']));
-    expect(r.spec.filters.map((k) => k.text)).toEqual(expect.arrayContaining(['Territory', 'HCP', 'Payer']));
+    expect(r.spec.filters.map((k) => k.text)).toEqual(expect.arrayContaining(['Territory', 'Sales Territory', 'Market', 'Product', 'Account', 'Payer', 'PBM']));
   });
   it('step 3 – data model and measures follow the business definitions', () => {
     expect(r.u.relationships.map((x) => `${x.fromDataset}>${x.toDataset}`).sort()).toEqual(['hcps>frm_territories', 'sp_patient_journey>hcps', 'sp_patient_journey>payer_plan_pbm']);
@@ -211,7 +212,8 @@ describe('Sanofi FRM patient funnel storyline', () => {
 
 describe('Sanofi FRM case view (ProcDNA FRM report + KPI catalogue)', () => {
   const d = generateAccessData();
-  const data: Record<string, Row[]> = { sp_patient_journey: d.journey, payer_plan_pbm: d.plans, hcps: d.hcps, frm_territories: d.territories, frm_cases: d.cases };
+  const data: Record<string, Row[]> = { sp_patient_journey: d.journey, payer_plan_pbm: d.plans, hcps: d.hcps, frm_territories: d.territories, frm_cases: d.cases, product_master: d.products };
+  const isOpen = (c: Row) => c.Case_Status === 'Open' || c.Case_Status === 'Escalated';
   const r = run(ACCESS_NARRATIVE, data);
   const rowsOf = (id: string) => data[id];
   const page = (name: string) => r.design.pages.find((p) => p.name === name)!;
@@ -223,15 +225,17 @@ describe('Sanofi FRM case view (ProcDNA FRM report + KPI catalogue)', () => {
     expect(r.spec.pages.slice(0, 2).map((p) => p.text)).toEqual(['Field Reimbursement Management', 'FRM Performance']);
     expect(r.u.mappings.filter((m) => m.kind === 'kpi' && m.status === 'missing')).toEqual([]);
   });
-  it('the case log joins to patients, HCPs (→ territories) and plans', () => {
+  it('the case log joins to patients, HCPs (→ territories), plans and products', () => {
     expect(r.u.profiles.find((p) => p.datasetId === 'frm_cases')).toMatchObject({ label: 'Case Activity', kind: 'activity', primaryKey: 'Case_ID', dateField: 'Case_Open_Date' });
-    expect(r.u.relationships.filter((x) => x.fromDataset === 'frm_cases').map((x) => x.toDataset).sort()).toEqual(['hcps', 'payer_plan_pbm', 'sp_patient_journey']);
+    expect(r.u.relationships.filter((x) => x.fromDataset === 'frm_cases').map((x) => x.toDataset).sort()).toEqual(['hcps', 'payer_plan_pbm', 'product_master', 'sp_patient_journey']);
   });
   it('catalogue KPIs follow the catalogue computation and the data', () => {
     const v = (n: string) => r.engine.value(cat(n).id, all, null)!;
     const closed = d.cases.filter((c) => c.Case_Status === 'Closed');
     expect(v('Total Cases Received')).toBe(d.cases.length);
-    expect(v('Open Case Backlog')).toBe(d.cases.filter((c) => c.Case_Status === 'Open').length);
+    // open backlog = open cases, including those being worked under escalation
+    expect(v('Open Case Backlog')).toBe(d.cases.filter(isOpen).length);
+    expect(d.cases.some((c) => c.Case_Status === 'Escalated')).toBe(true);
     expect(v('Case Closure Rate (%)')).toBeCloseTo((closed.length / d.cases.length) * 100, 6);
     const res = closed.map((c) => c.Days_to_Resolution as number).sort((a, b) => a - b);
     expect(v('Median Case Resolution Time (days)')).toBe(res.length % 2 ? res[res.length >> 1] : (res[res.length / 2 - 1] + res[res.length / 2]) / 2);
@@ -249,18 +253,40 @@ describe('Sanofi FRM case view (ProcDNA FRM report + KPI catalogue)', () => {
     expect([...new Set(p1.components.map((c) => c.section))]).toEqual(['Case Summary', 'Priority & Aging', 'Case List']);
     expect(p1.components.map((c) => c.type)).toEqual(['kpiGroup', 'kpiGroup', 'kpiGroup', 'kpiGroup', 'table', 'hbar', 'records']);
     const list = p1.components.find((c) => c.type === 'records')!;
-    expect(list.tableColumns!.map((x) => x.split('::')[1])).toEqual(expect.arrayContaining(['Case_ID', 'Patient_ID', 'HCP_Name', 'Payer', 'Current_Stage', 'Days_Open', 'Case_Details']));
+    expect(list.title).toBe('Case Overview');
+    expect(list.tableColumns!.map((x) => x.split('::')[1])).toEqual(expect.arrayContaining(['Case_ID', 'Case_Open_Date', 'Case_Type', 'FRM_Name', 'Patient_ID', 'Product_Name', 'PSP', 'Self_Enrolled', 'HCP_Name', 'Payer', 'Current_Stage', 'Days_Open', 'Case_Details']));
+    expect(list.toggle).toMatchObject({ allLabel: 'Overall Cases', label: 'Escalated Cases' });
     const p2 = page('FRM Performance');
     expect(p2.components.filter((c) => c.type === 'extremes')).toHaveLength(6);
-    expect(p2.components.find((c) => c.type === 'drilldown')!.levels!.map((x) => x.split('::')[1])).toEqual(['Region', 'Territory_Name', 'Case_Type', 'Case_Status']);
-    expect(r.design.filters.map((x) => x.field?.split('::')[1])).toEqual(expect.arrayContaining(['Region', 'Territory_Name', 'FRM_Name', 'HCP_Name', 'Payer', 'PBM', 'Case_Type']));
+    // ProcDNA FRM report: case volume by geography › product (open / escalated / closed), FRT and closure rate by month › product per geography
+    const col = (x?: string) => x?.split('::')[1];
+    const shape = (t: string) => { const c = p2.components.find((k) => k.title === t)!; return [c.type, col(c.dimension), c.timeGrain, col(c.subDimension), col(c.series)]; };
+    expect(shape('Case Volume by Geography')).toEqual(['stacked', 'Region', undefined, 'Product_Name', 'Case_Status']);
+    expect(shape('First Response Time (Days)')).toEqual(['stacked', undefined, 'month', 'Product_Name', 'Region']);
+    expect(shape('Case Closure Rate')).toEqual(['bar', undefined, 'month', 'Product_Name', 'Region']);
+    expect(shape('Case Load vs Resolution Time')).toEqual(['scatter', 'Region', undefined, undefined, 'Product_Name']);
+    expect(r.design.geoLevels).toMatchObject({ fields: ['frm_territories::Region', 'frm_territories::Territory_Name'], default: 'frm_territories::Region', pages: [p2.id] });
+    expect(r.design.filters.filter((x) => x.type === 'multi').map((x) => x.field?.split('::')[1])).toEqual(['Region', 'Territory_Name', 'Sales_Territory', 'Market', 'Product_Name', 'Institution', 'PBM', 'Payer']);
     expect(r.build.validations.every((v) => v.ok)).toBe(true);
   });
-  it('the case list holds every open case, with where the patient is stuck', () => {
+  it('geography charts split by product and follow the geo level', () => {
+    const p2 = page('FRM Performance');
+    const vol = p2.components.find((k) => k.title === 'Case Volume by Geography')!;
+    const m = r.engine.matrix(vol.measureIds[0], axisOf(vol), vol.series, all);
+    expect(m.series.sort()).toEqual(['Closed', 'Escalated', 'Open']);
+    expect(m.rows.reduce((s, x) => s + x.total, 0)).toBe(d.cases.length);
+    expect(new Set(m.rows.map((x) => x.keys[1]))).toEqual(new Set(['Spacysla', 'Qalvora']));
+    const terr = followGeo(vol, r.design, 'frm_territories::Territory_Name', r.f);
+    expect(terr.dimension).toBe('frm_territories::Territory_Name');
+    expect(r.engine.matrix(terr.measureIds[0], axisOf(terr), terr.series, all).rows.length).toBeGreaterThan(m.rows.length);
+    const scorecard = followGeo(p2.components[0], r.design, 'frm_territories::Territory_Name', r.f);
+    expect(scorecard.title).toBe('# Cases by Territory');
+  });
+  it('the case overview lists every case, with where the patient is stuck', () => {
     const list = page('Field Reimbursement Management').components.find((c) => c.type === 'records')!;
     const rows = r.engine.records(list.measureIds[0], all);
-    expect(rows).toHaveLength(d.cases.filter((c) => c.Case_Status === 'Open').length);
-    expect(rows.every((w) => w.v['frm_cases::Case_Status'] === 'Open' && w.v['sp_patient_journey::Current_Stage'] != null)).toBe(true);
+    expect(rows).toHaveLength(d.cases.length);
+    expect(rows.filter((w) => w.v['sp_patient_journey::Current_Stage'] == null)).toHaveLength(0);
     const esc = r.engine.records(list.measureIds[0], all, list.toggle!.filter);
     expect(esc.length).toBeGreaterThan(0);
     expect(esc.every((w) => w.v['frm_cases::Escalation_Flag'] === 'Escalated')).toBe(true);

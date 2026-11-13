@@ -92,9 +92,10 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
       if (c.type === 'funnel') {
         const names = c.measureIds.map((id) => f.measures.find((x) => x.id === id)?.name).filter(Boolean);
         add('Functional', pg, c.title, 'Funnel', [`1. Verify that the funnel shows ${names.join(' → ')}.`, '2. Check that each stage count and its share of the first stage are correct.'], 'Each funnel stage matches the source data and percentages are relative to the first stage.', { kind: 'funnel', componentId: c.id }, 'Critical', ds);
-      } else if (['bar', 'hbar', 'donut', 'stacked'].includes(c.type)) {
-        add('Functional', pg, c.title, el, [`1. Verify that the ${el.toLowerCase()} displays data for different ${dimName} values${valuesOf(c.dimension)}.`, `2. Check that the ${c.type === 'donut' ? 'segments' : 'bars'} are correctly colored and labeled.`], `The ${el.toLowerCase()} displays data for different ${dimName} values with correct colors and labels.`, { kind: 'group_recompute', componentId: c.id }, 'High', ds);
-      } else if (c.type === 'line' || c.type === 'area') {
+      } else if (['bar', 'hbar', 'donut', 'stacked'].includes(c.type) && c.dimension) {
+        const inner = c.subDimension ? ` and, within each, by ${lower(fieldLabel(f, c.subDimension))}` : '';
+        add('Functional', pg, c.title, el, [`1. Verify that the ${el.toLowerCase()} displays data for different ${dimName} values${valuesOf(c.dimension)}${inner}.`, `2. Check that the ${c.type === 'donut' ? 'segments' : 'bars'} are correctly colored and labeled.`], `The ${el.toLowerCase()} displays data for different ${dimName} values with correct colors and labels.`, { kind: 'group_recompute', componentId: c.id }, 'High', ds);
+      } else if (c.type === 'line' || c.type === 'area' || ((c.type === 'bar' || c.type === 'stacked') && c.timeGrain)) {
         const names = c.measureIds.map((id) => f.measures.find((x) => x.id === id)?.name).filter(Boolean).join(', ');
         add('Functional', pg, c.title, el, [`1. Verify that the ${el.toLowerCase()} displays data for ${names} by ${c.timeGrain ?? spec.timeGrain}.`, '2. Check that the lines are correctly colored and labeled.'], `The ${el.toLowerCase()} displays ${names} with correct colors and labels.`, { kind: 'series_recompute', componentId: c.id }, 'High', ds);
       } else if (c.type === 'table') {
@@ -127,7 +128,7 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
       }),
     );
   const all = spec.pages.flatMap((p) => p.components.map((c) => ({ p, c })));
-  const breakdowns = all.filter(({ c }) => ['bar', 'hbar', 'stacked', 'donut'].includes(c.type));
+  const breakdowns = all.filter(({ c }) => ['bar', 'hbar', 'stacked', 'donut'].includes(c.type) && c.dimension);
   const seenSections = new Set<string>();
   for (const { p, c } of breakdowns) {
     if (seenSections.has(c.title)) continue;

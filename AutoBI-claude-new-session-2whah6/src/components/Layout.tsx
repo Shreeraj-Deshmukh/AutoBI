@@ -17,13 +17,13 @@ export function Logo({ compact, light }: { compact?: boolean; light?: boolean })
       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-navy-700 shadow-sm">
         <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 h-[1.125rem] w-[1.125rem]" fill="none">
           <path d="M4 17l5-6 4 3 7-9" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx="20" cy="5" r="1.8" fill="#93b4fd" />
+          <circle cx="20" cy="5" r="1.8" fill="#d9b9ff" />
         </svg>
       </div>
       {!compact && (
         <div>
           <div className={cx('text-[0.9375rem] font-semibold tracking-tight', light ? 'text-navy-950' : 'text-white')}>Celestra</div>
-          <div className={cx('-mt-0.5 text-[0.625rem] uppercase tracking-[0.14em]', light ? 'text-slate-500' : 'text-blue-200/70')}>Agentic Reporting</div>
+          <div className={cx('-mt-0.5 text-[0.625rem] uppercase tracking-[0.14em]', light ? 'text-slate-500' : 'text-brand-200/80')}>Agentic Reporting</div>
         </div>
       )}
     </div>

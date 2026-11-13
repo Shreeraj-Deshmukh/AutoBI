@@ -83,7 +83,7 @@ function ProductFrame() {
                   <ResponsiveContainer>
                     <BarChart data={d?.bars ?? []} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
                       <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} axisLine={false} tickLine={false} tickFormatter={(v: string) => (v.length > 9 ? `${v.split(" ")[0]}` : v)} />
-                      <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>{(d?.bars ?? []).map((b, i) => <Cell key={b.name} fill={i === 0 ? '#2550eb' : '#93b4fd'} />)}</Bar>
+                      <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>{(d?.bars ?? []).map((b, i) => <Cell key={b.name} fill={i === 0 ? '#7a00e6' : '#bd8bff'} />)}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -93,7 +93,7 @@ function ProductFrame() {
                 <div className="h-28">
                   <ResponsiveContainer>
                     <AreaChart data={d?.trend ?? []} margin={{ top: 8, right: 2, left: 2, bottom: 0 }}>
-                      <Area dataKey="v" stroke="#2550eb" fill="#dbe6fe" strokeWidth={1.5} isAnimationActive={false} />
+                      <Area dataKey="v" stroke="#7a00e6" fill="#ecdcff" strokeWidth={1.5} isAnimationActive={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -193,26 +193,26 @@ export default function Landing() {
       <section id="workflow" className="bg-navy-950 py-24 text-white">
         <div className="mx-auto max-w-6xl px-6">
           <div className="max-w-2xl">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">The workflow</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-300">The workflow</div>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Each stage hands a reviewed artifact to the next.</h2>
-            <p className="mt-4 text-blue-100/70">Nothing moves forward without approval. Change something upstream and every affected stage is flagged for review — approved work is never silently overwritten.</p>
+            <p className="mt-4 text-brand-100/70">Nothing moves forward without approval. Change something upstream and every affected stage is flagged for review — approved work is never silently overwritten.</p>
           </div>
           <ol className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
             {STAGES.map((s, i) => (
               <li key={s.id} className="bg-navy-950 p-6">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-blue-300">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.625rem] text-blue-100/70">{ARTIFACTS[i]}</span>
+                  <span className="font-mono text-xs text-brand-300">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.625rem] text-brand-100/70">{ARTIFACTS[i]}</span>
                 </div>
                 <div className="mt-6 text-lg font-semibold">{s.label}</div>
-                <p className="mt-2 text-sm leading-relaxed text-blue-100/60">{STEP_COPY[i]}</p>
+                <p className="mt-2 text-sm leading-relaxed text-brand-100/60">{STEP_COPY[i]}</p>
               </li>
             ))}
             <li className="flex flex-col justify-between bg-brand-600 p-6">
               <GitBranch className="h-5 w-5" />
               <div>
                 <div className="text-lg font-semibold">Every change is versioned</div>
-                <p className="mt-2 text-sm text-blue-50/85">Requirements, model, design, dashboard, tests and documents all keep their history.</p>
+                <p className="mt-2 text-sm text-brand-50/85">Requirements, model, design, dashboard, tests and documents all keep their history.</p>
               </div>
             </li>
           </ol>
@@ -266,7 +266,7 @@ export default function Landing() {
         <div className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-3">
           {[
             { icon: FileSpreadsheet, title: 'Files', text: 'CSV, Excel workbooks (one dataset per sheet) and JSON. Data stays in the browser.' },
-            { icon: Database, title: 'Databricks & Snowflake', text: 'Browse a catalog or schema and import tables through the server — tokens never reach the browser.', extra: <Snowflake className="h-4 w-4 text-sky-600" /> },
+            { icon: Database, title: 'Databricks & Snowflake', text: 'Browse a catalog or schema and import tables through the server — tokens never reach the browser.', extra: <Snowflake className="h-4 w-4 text-brand-600" /> },
             { icon: Sparkles, title: 'Azure AI Foundry', text: 'Language tasks use your Azure model. Calculations, mapping and test validation stay deterministic and auditable.' },
           ].map((c) => (
             <div key={c.title}>

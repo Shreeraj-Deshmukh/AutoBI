@@ -43,6 +43,7 @@ const acc = generateAccessData();
 write('access', 'sp_patient_journey.csv', toCsv(acc.journey));
 write('access', 'payer_plan_pbm.csv', toCsv(acc.plans));
 write('access', 'frm_cases.csv', toCsv(acc.cases));
+write('access', 'product_master.csv', toCsv(acc.products));
 // corrected payer file: the data owner adds the plan that 3 SP cases reference
 write('access/corrections', 'payer_plan_pbm.csv', toCsv([...acc.plans, { Plan_ID: 'PL-9999', Plan_Name: 'Highmark BCBS PPO', Payer: 'BCBS (regional plans)', Channel: 'Commercial', PBM: 'Prime Therapeutics', Formulary_Status: 'Covered with PA' }]));
 const awb = XLSX.utils.book_new();
@@ -61,17 +62,21 @@ ${ACCESS_NARRATIVE}
 Files to attach in the Data step:
 - sp_patient_journey.csv   specialty pharmacy patient journey: referral → benefits verification → PA → decision / appeal → therapy start
 - payer_plan_pbm.csv       payer, plan, channel, PBM and formulary status
-- hcp_frm_alignment.xlsx   sheet "HCPs" (HCP, specialty, institution, territory) and sheet "FRM Territories" (territory, region, FRM)
+- hcp_frm_alignment.xlsx   sheet "HCPs" (HCP, specialty, institution, sales territory, FRM territory) and sheet "FRM Territories" (territory, region, FRM)
 - frm_cases.csv            FRM case log: one row per access case (benefit investigation, PA support, appeal,
-                           reimbursement support, query) with status, priority, escalation, open / first action / close dates
+                           reimbursement support, query) with product, PSP / self-enrolled flags, status (Open / Escalated / Closed),
+                           priority, escalation, open / first action / close dates
+- product_master.csv       products (Spacysla, Qalvora) and their market
 
 What the FRM view shows (ProcDNA FRM report layout):
 - Reporting Foundation → "ProcDNA KPI Catalogue" tab: which Case and FRM Management catalogue metrics the data
   computes (and which need CRM / survey / finance data).
-- Design Studio → page "Field Reimbursement Management": case summary cards, Priority Prescribers with flags,
-  Open Case Aging and the Open Cases list (toggle "Escalated only"; click a case to see where the patient is stuck).
-- Page "FRM Performance": territory scorecard (highest / lowest), case volume and closure rate by territory,
-  FRM response time, case load vs response time, and the Case Journey drilldown (region > territory > case type > status).
+- Filters: Region, FRM Territory, Sales Territory, Market, Product, Account, PBM, Payer, time period (calendar YTD by default) and custom dates.
+- Design Studio → page "Field Reimbursement Management": Cases, Time to Resolution, Resolution Rate by Case Type and
+  Time to First Fill cards, Priority Prescribers with flags, Open Case Aging and the Case Overview list
+  (Overall Cases / Escalated Cases; click a case to see where the patient is stuck).
+- Page "FRM Performance": territory scorecard (highest / lowest), case volume by territory and product (open / escalated / closed),
+  first response time and closure rate by month, product and territory, and case load vs resolution time.
 
 Live change request for the demo (Step 4):
 1. Requirements chat:  "FRMs also need to see HCPs where more than five patients are currently experiencing prior authorization delays."

@@ -1,4 +1,4 @@
-import type { Cell, DatasetProfile, FieldRef, MeasureCondition, MeasureDef, PeriodPreset, Relationship, Row, TimeGrain } from '@/types';
+import type { Cell, DashComponent, DatasetProfile, FieldRef, MeasureCondition, MeasureDef, PeriodPreset, Relationship, Row, TimeGrain } from '@/types';
 import { bucketOf, parseDate, previousPeriod, resolvePeriod, type Period } from './dates';
 import { conditionsOf, test as testCond } from './conditions';
 import { rowsVersion } from './rowStore';
@@ -36,6 +36,22 @@ export interface EngineInput {
   measures: MeasureDef[];
   rowsOf: (id: string) => Row[];
 }
+
+/** One level of a chart axis: a field, or the period of the measure's own date. */
+export type AxisLevel = { field: FieldRef } | { grain: TimeGrain };
+/** One axis position of `Engine.matrix`: the key per axis level, and the value per series (key `VALUE` without a series). */
+export interface MatrixRow {
+  keys: string[];
+  values: Record<string, number>;
+  total: number;
+}
+export const VALUE = '__value';
+const KEY_SEP = '\u0001';
+
+/** Bar / stacked chart with a two-level axis (Territory › Product, Month › Product) and/or, for bars, one bar per series value. */
+export const isMatrix = (c: DashComponent) => (c.type === 'bar' || c.type === 'stacked') && (!!c.subDimension || (!!c.timeGrain && !c.dimension) || (c.type === 'bar' && !!c.series));
+/** Axis levels of a matrix chart, outermost first. */
+export const axisOf = (c: DashComponent): AxisLevel[] => [...(c.timeGrain && !c.dimension ? [{ grain: c.timeGrain }] : c.dimension ? [{ field: c.dimension }] : []), ...(c.subDimension ? [{ field: c.subDimension }] : [])];
 
 const wideCache = new Map<string, WideRow[]>();
 
@@ -280,6 +296,68 @@ export class Engine {
     });
     out.sort((x, y) => (isOrdinal([String(x.key), String(y.key)]) ? String(x.key).localeCompare(String(y.key), undefined, { numeric: true }) : (y.__total as number) - (x.__total as number)));
     return { rows: out, keys: [...keys].sort() };
+  }
+
+  /** Value of a measure for every combination of the given levels (field values or periods of the measure's date). */
+  private multiRaw(m: MeasureDef, levels: AxisLevel[], f: FilterState, period: Period | null): Map<string, number> {
+    const out = new Map<string, number>();
+    if (m.kind === 'ratio') {
+      const n = this.multiRaw(this.measures.get(m.numeratorId!)!, levels, f, period);
+      const d = this.multiRaw(this.measures.get(m.denominatorId!)!, levels, f, period);
+      for (const [k, dv] of d) if (dv) out.set(k, ((n.get(k) ?? 0) / dv) * (m.format === 'percent' ? 100 : 1));
+      return out;
+    }
+    if (!m.datasetId || levels.some((l) => 'field' in l && !this.reachable(m.datasetId!, l.field))) return out;
+    const buckets = new Map<string, WideRow[]>();
+    for (const w of this.filtered(m.datasetId, f, period)) {
+      const parts = levels.map((l) => ('grain' in l ? (w.t == null ? null : bucketOf(w.t, l.grain)) : display(w.v[l.field])));
+      if (parts.some((p) => p == null)) continue;
+      const k = parts.join(KEY_SEP);
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k)!.push(w);
+    }
+    for (const [k, rows] of buckets) out.set(k, this.aggregate(m, rows));
+    return out;
+  }
+
+  /**
+   * Multi-level grouping for charts with a two-level axis and/or a series, e.g. closure rate by month › product, one bar per territory.
+   * Rows are ordered level by level (periods and ordinal values ascending, other values alphabetically).
+   */
+  matrix(mid: string, axis: AxisLevel[], series: FieldRef | undefined, f: FilterState) {
+    const m = this.measures.get(mid);
+    if (!m) return { rows: [] as MatrixRow[], series: [] as string[] };
+    const { current } = this.resolve(f);
+    const raw = this.multiRaw(m, series ? [...axis, { field: series }] : axis, f, current);
+    const rows = new Map<string, MatrixRow>();
+    const seriesKeys = new Map<string, number>();
+    for (const [k, v] of raw) {
+      const parts = k.split(KEY_SEP);
+      const keys = parts.slice(0, axis.length);
+      if (keys.includes(UNMATCHED)) continue;
+      const s = series ? parts[axis.length] : VALUE;
+      if (s === UNMATCHED || (s === BLANK && !v)) continue;
+      const id = keys.join(KEY_SEP);
+      if (!rows.has(id)) rows.set(id, { keys, values: {}, total: 0 });
+      const row = rows.get(id)!;
+      row.values[s] = v;
+      row.total += v;
+      seriesKeys.set(s, (seriesKeys.get(s) ?? 0) + v);
+    }
+    const order = axis.map((_, i) => {
+      const vals = [...new Set([...rows.values()].map((r) => r.keys[i]))];
+      const sorted = isOrdinal(vals) || 'grain' in axis[i] ? vals.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) : vals.sort((a, b) => a.localeCompare(b));
+      return new Map(sorted.map((v, j) => [v, j]));
+    });
+    const out = [...rows.values()].sort((a, b) => {
+      for (let i = 0; i < axis.length; i++) {
+        const d = order[i].get(a.keys[i])! - order[i].get(b.keys[i])!;
+        if (d) return d;
+      }
+      return 0;
+    });
+    const sk = [...seriesKeys.keys()];
+    return { rows: out, series: isOrdinal(sk) ? sk.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) : sk.sort((a, b) => a.localeCompare(b)) };
   }
 
   series(mid: string, grain: TimeGrain, f: FilterState) {

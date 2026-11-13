@@ -2,7 +2,10 @@ import type { DashComponent, DashPage, DashboardSpec, FieldRef, Foundation } fro
 import { CARD_TYPES, cardWeight } from '@/agents/designAgent';
 import { PERIOD_LABELS } from '@/lib/dates';
 import { fieldLabel } from '@/lib/fieldLabels';
-import { DATE_TABLE, PERIOD_COLUMN, PERIOD_PRESETS, PERIOD_TABLE, formatOf, type PbiModel } from './model';
+import { CLIENT_THEME } from '@/dashboard/format';
+import { LOGO_FILE } from './theme';
+import { axisOf, isMatrix } from '@/lib/engine';
+import { DATE_TABLE, PERIOD_COLUMN, PERIOD_PRESETS, PERIOD_TABLE, addFieldParameter, formatOf, type PbiModel } from './model';
 import { daxCol, daxMeasure, daxString, pbirString, shortId } from './names';
 
 /**
@@ -54,6 +57,53 @@ interface Ctx {
   spec: DashboardSpec;
   warnings: string[];
   page: DashPage;
+  /** "Geo Level" field parameter, on pages that show the selector. */
+  geo?: GeoParam;
+}
+
+interface GeoParam {
+  /** display column of the parameter table (what the slicer and visuals reference) */
+  param: FieldExpr;
+  order: FieldExpr;
+  fields: FieldRef[];
+  labels: string[];
+  defaultIndex: number;
+}
+
+/** Visual role: projections, plus the field parameter a projection comes from. */
+interface Role {
+  projections: Json[];
+  fieldParameters?: Json[];
+}
+
+const queryRefOf = (f: FieldExpr) => `${f.table}.${f.property}`;
+const followsGeo = (ctx: Ctx, ref?: FieldRef) => !!(ref && ctx.geo?.fields.includes(ref));
+
+/** Role for category / series fields; a field that follows the Geo Level selector is projected through the field parameter. */
+function role(ctx: Ctx, items: { f: FieldExpr; ref?: FieldRef }[], active = false): Role {
+  const geoAt = items.findIndex((it) => followsGeo(ctx, it.ref));
+  return {
+    projections: items.map((it) => ({ ...projection(it.f), ...(active ? { active: true } : {}) })),
+    ...(geoAt >= 0 ? { fieldParameters: [{ parameterExpr: fieldJson(ctx.geo!.param), index: geoAt, length: 1 }] } : {}),
+  };
+}
+
+/** Title that names the selected geo level ("Closure Rate by Region (%)" → measure-driven text), else the static title. */
+function titleOf(ctx: Ctx, c: DashComponent): string | Json {
+  const g = ctx.geo;
+  if (!g || !(followsGeo(ctx, c.dimension) || followsGeo(ctx, c.series))) return c.title;
+  const label = g.labels[g.defaultIndex];
+  const at = c.title.indexOf(label);
+  const m = ctx.model.measureOf.get(c.measureIds[0]);
+  if (at < 0 || !m) return c.title;
+  const name = ctx.model.addMeasure(m.table, {
+    name: `${c.title} – Title`,
+    // the parameter's display column cannot be read on its own (it is grouped by the fields column), so go through the order column
+    expression: `${daxString(c.title.slice(0, at))} & SWITCH(SELECTEDVALUE(${daxCol(g.order.table, g.order.property)}, ${g.defaultIndex}), ${g.labels.map((l, i) => `${i}, ${daxString(l)}`).join(', ')}) & ${daxString(c.title.slice(at + label.length))}`,
+    description: `Title of "${c.title}", naming the selected geo level.`,
+    displayFolder: 'Titles',
+  });
+  return { expr: fieldJson({ table: m.table, property: name, kind: 'Measure' }) };
 }
 
 // ───────────────────────────── field helpers ─────────────────────────────
@@ -74,8 +124,8 @@ function isOrdinalColumn(ctx: Ctx, f: FieldExpr) {
   return !!ctx.model.table(f.table)?.columns.find((c) => c.name === f.property)?.sortByColumn;
 }
 
-const titleObjects = (title: string, subtitle?: string | Json): Json => ({
-  title: [{ properties: { show: TRUE, text: lit(pbirString(title)) } }],
+const titleObjects = (title: string | Json, subtitle?: string | Json): Json => ({
+  title: [{ properties: { show: TRUE, text: typeof title === 'string' ? lit(pbirString(title)) : title } }],
   ...(subtitle ? { subTitle: [{ properties: { show: TRUE, text: typeof subtitle === 'string' ? lit(pbirString(subtitle)) : subtitle } }] } : {}),
 });
 
@@ -169,13 +219,20 @@ function extremeMeasure(ctx: Ctx, c: DashComponent, which: 'high' | 'low', withV
   const m = ctx.model.measureOf.get(c.measureIds[0]);
   const d = colField(ctx, c.dimension);
   if (!m || !d) return null;
-  const dc = daxCol(d.table, d.property);
-  const order = which === 'high' ? `[@v], DESC, ${dc}, ASC` : `[@v], ASC, ${dc}, DESC`;
-  const label = withValue ? `MAXX(_top, ${dc}) & " · " & FORMAT(MAXX(_top, [@v]), ${fmtLiteral(ctx, c.measureIds[0])})` : `MAXX(_top, ${dc})`;
+  const expr = (f: FieldExpr) => {
+    const dc = daxCol(f.table, f.property);
+    const order = which === 'high' ? `[@v], DESC, ${dc}, ASC` : `[@v], ASC, ${dc}, DESC`;
+    const label = withValue ? `MAXX(_top, ${dc}) & " · " & FORMAT(MAXX(_top, [@v]), ${fmtLiteral(ctx, c.measureIds[0])})` : `MAXX(_top, ${dc})`;
+    return `VAR _t = FILTER(ADDCOLUMNS(FILTER(VALUES(${dc}), NOT ISBLANK(${dc})), "@v", ${daxMeasure(m.name)}), NOT ISBLANK([@v])) VAR _top = TOPN(1, _t, ${order}) RETURN IF(NOT ISEMPTY(_top), ${label})`;
+  };
+  // following the Geo Level selector: one branch per level
+  const g = followsGeo(ctx, c.dimension) ? ctx.geo! : null;
+  const levels = g ? g.fields.map((r) => colField(ctx, r)) : [];
+  const expression = g && levels.every(Boolean) ? `SWITCH(SELECTEDVALUE(${daxCol(g.order.table, g.order.property)}, ${g.defaultIndex}), ${levels.map((f, i) => `${i}, (${expr(f!)})`).join(', ')})` : expr(d);
   const name = ctx.model.addMeasure(m.table, {
     name: `${c.title} – ${withValue ? (which === 'high' ? 'Highest' : 'Lowest') : `Top ${d.property}`}`,
-    expression: `VAR _t = FILTER(ADDCOLUMNS(FILTER(VALUES(${dc}), NOT ISBLANK(${dc})), "@v", ${daxMeasure(m.name)}), NOT ISBLANK([@v])) VAR _top = TOPN(1, _t, ${order}) RETURN IF(NOT ISEMPTY(_top), ${label})`,
-    description: `${which === 'high' ? 'Highest' : 'Lowest'} ${d.property} by ${m.name} (scorecard card "${c.title}").`,
+    expression,
+    description: `${which === 'high' ? 'Highest' : 'Lowest'} ${g ? 'geography (selected geo level)' : d.property} by ${m.name} (scorecard card "${c.title}").`,
     displayFolder: 'Scorecard',
   });
   return { table: m.table, property: name, kind: 'Measure' };
@@ -237,7 +294,7 @@ interface VisualSpec {
   filters?: Json[];
 }
 
-function chart(visualType: string, queryState: Json, objects: Json, title: string, subtitle?: string, sort?: Json): Json {
+function chart(visualType: string, queryState: Json, objects: Json, title: string | Json, subtitle?: string, sort?: Json): Json {
   return {
     visualType,
     query: { queryState, ...(sort ? { sortDefinition: sort } : {}) },
@@ -247,7 +304,8 @@ function chart(visualType: string, queryState: Json, objects: Json, title: strin
   };
 }
 
-const state = (roles: Record<string, Json[]>) => Object.fromEntries(Object.entries(roles).filter(([, p]) => p.length).map(([k, p]) => [k, { projections: p }]));
+const state = (roles: Record<string, Json[] | Role>) =>
+  Object.fromEntries(Object.entries(roles).map(([k, p]) => [k, Array.isArray(p) ? { projections: p } : p] as const).filter(([, p]) => p.projections.length));
 const labelsOn = { labels: [{ properties: { show: TRUE } }] };
 
 function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
@@ -258,13 +316,16 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
     return null;
   }
   if (missing) ctx.warnings.push(`"${c.title}" (${ctx.page.name}): ${missing} measure(s) could not be exported and were left out.`);
+  const sub = c.description || undefined;
+  const title = titleOf(ctx, c);
+  if (isMatrix(c)) return matrixVisual(ctx, c, measures[0], title, sub);
   const dim = colField(ctx, c.dimension);
   const needsDim = ['bar', 'hbar', 'donut', 'stacked', 'table', 'extremes', 'scatter'].includes(c.type);
   if (needsDim && !dim) {
     ctx.warnings.push(`"${c.title}" (${ctx.page.name}) was skipped: its category field is not in the model.`);
     return null;
   }
-  const sub = c.description || undefined;
+  const catRole = (ref: FieldRef | undefined, f: FieldExpr) => role(ctx, [{ f, ref }]);
   const threshold = (f: FieldExpr) => {
     if (!c.threshold) return [];
     const pct = ctx.model.measureOf.get(c.measureIds[0])?.def.format === 'percent';
@@ -299,7 +360,7 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
       const lo = extremeMeasure(ctx, c, 'low');
       if (!hi || !lo) return null;
       const values = c.lowIsBest ? [projection(lo, 'Fastest'), projection(hi, 'Slowest')] : [projection(hi, 'Highest'), projection(lo, 'Lowest')];
-      return { visual: chart('multiRowCard', state({ Values: values }), {}, c.title, sub) };
+      return { visual: chart('multiRowCard', state({ Values: values }), {}, title, sub) };
     }
     case 'bar':
     case 'hbar':
@@ -307,14 +368,14 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
       const type = c.type === 'bar' ? 'clusteredColumnChart' : c.type === 'hbar' ? 'clusteredBarChart' : 'donutChart';
       const sort = isOrdinalColumn(ctx, dim!) ? sortBy(dim!, 'Ascending') : sortBy(measures[0], 'Descending');
       return {
-        visual: chart(type, state({ Category: [projection(dim!)], Y: [projection(measures[0])] }), c.type === 'donut' ? {} : labelsOn, c.title, sub, sort),
+        visual: chart(type, state({ Category: catRole(c.dimension, dim!), Y: [projection(measures[0])] }), c.type === 'donut' ? {} : labelsOn, title, sub, sort),
         filters: [...(c.topN ? [topNFilter(dim!, measures[0], c.topN)] : []), ...threshold(measures[0])],
       };
     }
     case 'stacked': {
       const series = colField(ctx, c.series);
       // Power BI's internal name for the stacked column chart is "columnChart" ("clusteredColumnChart" is side by side)
-      return { visual: chart('columnChart', state({ Category: [projection(dim!)], Series: series ? [projection(series)] : [], Y: [projection(measures[0])] }), {}, c.title, sub, isOrdinalColumn(ctx, dim!) ? sortBy(dim!, 'Ascending') : undefined) };
+      return { visual: chart('columnChart', state({ Category: catRole(c.dimension, dim!), Series: series ? catRole(c.series, series) : [], Y: [projection(measures[0])] }), {}, title, sub, isOrdinalColumn(ctx, dim!) ? sortBy(dim!, 'Ascending') : undefined) };
     }
     case 'line':
     case 'area': {
@@ -329,9 +390,11 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
     case 'funnel':
       // one bar per stage measure (Power BI's funnel visual needs a single measure split by a category)
       return { visual: chart('clusteredBarChart', state({ Y: measures.map((m) => projection(m)) }), labelsOn, c.title, sub) };
-    case 'scatter':
+    case 'scatter': {
       if (measures.length < 2) return null;
-      return { visual: chart('scatterChart', state({ Category: [projection(dim!)], X: [projection(measures[0])], Y: [projection(measures[1])] }), { categoryLabels: [{ properties: { show: TRUE } }] }, c.title, sub) };
+      const series = colField(ctx, c.series);
+      return { visual: chart('scatterChart', state({ Category: catRole(c.dimension, dim!), Series: series ? catRole(c.series, series) : [], X: [projection(measures[0])], Y: [projection(measures[1])] }), { categoryLabels: [{ properties: { show: TRUE } }], ...(series ? { legend: [{ properties: { show: TRUE, position: lit("'Bottom'") } }] } : {}) }, title, sub) };
+    }
     case 'table': {
       const attrs = (c.tableColumns ?? []).map((r) => colField(ctx, r)).filter((x): x is FieldExpr => !!x);
       const flags = c.flags ? flagMeasure(ctx, c) : null;
@@ -360,14 +423,62 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
   return null;
 }
 
-function slicer(field: FieldExpr, opts: { mode: 'Dropdown' | 'Between'; single?: boolean; selected?: string; header?: string }): Json {
+/**
+ * Bar / stacked chart with a two-level axis (period or field › field) and/or a series: the levels go into Category,
+ * expanded down so both show (Power BI draws the outer level as group labels under the inner one).
+ */
+function matrixVisual(ctx: Ctx, c: DashComponent, measure: FieldExpr, title: string | Json, sub?: string): VisualSpec | null {
+  const items: { f: FieldExpr; ref?: FieldRef }[] = [];
+  let time = false;
+  for (const a of axisOf(c)) {
+    if ('grain' in a) {
+      if (!ctx.model.hasDates) {
+        ctx.warnings.push(`"${c.title}" (${ctx.page.name}) was skipped: the data has no activity dates.`);
+        return null;
+      }
+      time = true;
+      items.push({ f: { table: DATE_TABLE, property: a.grain === 'week' ? 'Week Start' : a.grain === 'quarter' ? 'Quarter' : 'Month', kind: 'Column' } });
+    } else {
+      const f = colField(ctx, a.field);
+      if (!f) {
+        ctx.warnings.push(`"${c.title}" (${ctx.page.name}) was skipped: its category field is not in the model.`);
+        return null;
+      }
+      items.push({ f, ref: a.field });
+    }
+  }
+  const series = c.series ? colField(ctx, c.series) : null;
+  if (c.series && !series) ctx.warnings.push(`"${c.title}" (${ctx.page.name}): its series field is not in the model, so it shows one bar per category.`);
+  const stacked = c.type === 'stacked';
+  const visual = chart(
+    stacked ? 'columnChart' : 'clusteredColumnChart',
+    state({ Category: role(ctx, items, items.length > 1), Series: series ? role(ctx, [{ f: series, ref: c.series }]) : [], Y: [projection(measure)] }),
+    { ...(time ? { categoryAxis: [{ properties: { axisType: lit("'Categorical'") } }] } : {}), ...(stacked ? labelsOn : {}), ...(series ? { legend: [{ properties: { show: TRUE, position: lit("'Bottom'") } }] } : {}) },
+    title,
+    sub,
+    sortBy(items[0].f, 'Ascending'),
+  );
+  if (items.length > 1)
+    visual.expansionStates = [
+      {
+        roles: ['Category'],
+        levels: items.map((it, i) => ({ queryRefs: [queryRefOf(it.f)], ...(i < items.length - 1 ? { isCollapsed: true, identityKeys: [fieldJson(it.f)] } : {}), isPinned: true })),
+        root: {},
+      },
+    ];
+  return { visual };
+}
+
+function slicer(field: FieldExpr, opts: { mode: 'Dropdown' | 'Between'; single?: boolean; selected?: string; header?: string; selectOn?: FieldExpr }): Json {
   const general: Json = {};
+  // a field parameter's selection is stored on its (hidden) fields column, as the NAMEOF() text
+  const on = opts.selectOn ?? field;
   if (opts.selected)
     general.filter = {
       filter: {
         Version: 2,
-        From: [{ Name: 's', Entity: field.table, Type: 0 }],
-        Where: [{ Condition: { In: { Expressions: [fieldJson(field, 's')], Values: [[{ Literal: { Value: pbirString(opts.selected) } }]] } } }],
+        From: [{ Name: 's', Entity: on.table, Type: 0 }],
+        Where: [{ Condition: { In: { Expressions: [fieldJson(on, 's')], Values: [[{ Literal: { Value: pbirString(opts.selected) } }]] } } }],
       },
     };
   return {
@@ -383,11 +494,24 @@ function slicer(field: FieldExpr, opts: { mode: 'Dropdown' | 'Between'; single?:
   };
 }
 
+/** Image visual showing a registered resource of the report (the client logo). */
+function image(item: string): Json {
+  return {
+    visualType: 'image',
+    objects: {
+      general: [{ properties: { imageUrl: { expr: { ResourcePackageItem: { PackageName: 'RegisteredResources', PackageType: 1, ItemName: item } } } } }],
+      imageScaling: [{ properties: { imageScalingType: lit("'Fit'") } }],
+    },
+    visualContainerObjects: { title: [{ properties: { show: FALSE } }], background: [{ properties: { show: FALSE } }], border: [{ properties: { show: FALSE } }] },
+    drillFilterOtherVisuals: true,
+  };
+}
+
 function textbox(paragraphs: { text: string; size: number; bold?: boolean; color?: string }[]): Json {
   return {
     visualType: 'textbox',
     objects: {
-      general: [{ properties: { paragraphs: paragraphs.map((p) => ({ textRuns: [{ value: p.text, textStyle: { fontSize: `${p.size}pt`, ...(p.bold ? { fontWeight: 'bold' } : {}), color: p.color ?? '#0f1f42' } }] })) } }],
+      general: [{ properties: { paragraphs: paragraphs.map((p) => ({ textRuns: [{ value: p.text, textStyle: { fontSize: `${p.size}pt`, ...(p.bold ? { fontWeight: 'bold' } : {}), color: p.color ?? CLIENT_THEME.ink } }] })) } }],
     },
     drillFilterOtherVisuals: true,
   };
@@ -418,13 +542,20 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     return name;
   };
 
-  // header: page title + description
+  // header: client logo, page title + description
   let y = MARGIN;
-  place('title', textbox([{ text: page.name, size: 18, bold: true }, ...(page.description ? [{ text: page.description, size: 10, color: '#64748b' }] : [])]), { x: MARGIN, y, width: INNER, height: page.description ? 64 : 44 });
-  y += (page.description ? 64 : 44) + 8;
+  const LOGO_W = 150;
+  place('logo', image(LOGO_FILE), { x: MARGIN, y: y + 4, width: LOGO_W, height: 40 });
+  place('title', textbox([{ text: page.name, size: 18, bold: true, color: CLIENT_THEME.primary }, ...(page.description ? [{ text: page.description, size: 10, color: CLIENT_THEME.muted }] : [])]), { x: MARGIN + LOGO_W + GAP, y, width: INNER - LOGO_W - GAP, height: page.description ? 64 : 44 });
+  y += (page.description ? 64 : 48) + 8;
 
   // slicer bar: reporting period, date range and the dashboard filters (synced across pages)
   const slicers: { json: Json; width: number }[] = [];
+  if (ctx.geo) {
+    const def = colField(ctx, ctx.geo.fields[ctx.geo.defaultIndex]);
+    const fieldsCol: FieldExpr = { table: ctx.geo.param.table, property: `${ctx.geo.param.property} Fields`, kind: 'Column' };
+    slicers.push({ json: slicer(ctx.geo.param, { mode: 'Dropdown', single: true, header: 'Geo Level', ...(def ? { selected: daxCol(def.table, def.property), selectOn: fieldsCol } : {}) }), width: 170 });
+  }
   if (ctx.model.hasDates) {
     const preset = PERIOD_PRESETS.includes(ctx.spec.defaultPeriod) ? PERIOD_LABELS[ctx.spec.defaultPeriod] : undefined;
     slicers.push({ json: slicer({ table: PERIOD_TABLE, property: PERIOD_COLUMN, kind: 'Column' }, { mode: 'Dropdown', single: true, selected: preset }), width: 220 });
@@ -433,7 +564,7 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
   for (const fd of ctx.spec.filters) {
     const f = fd.type === 'multi' ? colField(ctx, fd.field) : null;
     if (fd.type === 'multi' && !f) ctx.warnings.push(`Filter "${fd.label}" was skipped: its field is not in the model.`);
-    if (f) slicers.push({ json: slicer(f, { mode: 'Dropdown' }), width: 190 });
+    if (f) slicers.push({ json: slicer(f, { mode: 'Dropdown', header: fd.label || undefined }), width: 190 });
   }
   let x = MARGIN;
   const SLICER_H = 60;
@@ -513,7 +644,7 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
       flushCards();
       flushRow();
       section = c.section;
-      place('section', textbox([{ text: c.section.toUpperCase(), size: 11, bold: true, color: '#1e3a8a' }]), { x: MARGIN, y, width: INNER, height: 32 });
+      place('section', textbox([{ text: c.section.toUpperCase(), size: 11, bold: true, color: CLIENT_THEME.primary }]), { x: MARGIN, y, width: INNER, height: 32 });
       y += 32 + 4;
     }
     const v = componentVisual(ctx, c);
@@ -552,8 +683,16 @@ export function buildReport(model: PbiModel, spec: DashboardSpec, foundation: Fo
   const warnings: string[] = [];
   const files: Record<string, Json> = {};
   const pageNames: string[] = [];
+  // "Geo Level" selector → field parameter (Region / Territory …)
+  let geo: GeoParam | undefined;
+  if (spec.geoLevels) {
+    const labels = spec.geoLevels.fields.map((r) => fieldLabel(foundation, r).replace(/ Name$/, ''));
+    const p = addFieldParameter(model, 'Geo Level', spec.geoLevels.fields.map((ref, i) => ({ label: labels[i], ref })));
+    if (p) geo = { param: { table: p.table, property: p.display, kind: 'Column' }, order: { table: p.table, property: p.order, kind: 'Column' }, fields: spec.geoLevels.fields, labels, defaultIndex: Math.max(0, spec.geoLevels.fields.indexOf(spec.geoLevels.default)) };
+    else warnings.push('The Geo Level selector was not exported: one of its fields is not in the model.');
+  }
   spec.pages.forEach((page, i) => {
-    const p = buildPage({ model, foundation, spec, warnings, page }, i);
+    const p = buildPage({ model, foundation, spec, warnings, page, geo: geo && spec.geoLevels!.pages.includes(page.id) ? geo : undefined }, i);
     pageNames.push(p.name);
     Object.assign(files, p.files);
   });

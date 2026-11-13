@@ -34,7 +34,7 @@ export const TEMPLATE_TYPES: ComponentType[] = ['kpiGroup', 'extremes', 'records
 /** Card-style components laid out side by side in a row. */
 export const CARD_TYPES: ComponentType[] = ['kpi', 'kpiGroup', 'extremes'];
 /** Relative width of a card in its row (number of values it shows). */
-export const cardWeight = (c: DashComponent) => (c.type === 'kpiGroup' ? (c.dimension ? 5 : Math.max(1, c.measureIds.length)) : c.type === 'extremes' ? 2 : 1);
+export const cardWeight = (c: DashComponent) => (c.type === 'kpiGroup' ? (c.dimension ? 5 : Math.max(1, c.measureIds.length)) : c.type === 'extremes' ? 2.5 : 1); // highest / lowest cards: three to a row
 
 interface Ctx {
   u: DataUnderstanding;
@@ -208,7 +208,8 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
   }
   // the FRM report opens on calendar year to date
   const preset = frm ? 'ytd' : grain === 'week' ? 'r13w' : grain === 'month' ? 'last6m' : 'last12m';
-  return { pages, filters: frm ? filters.slice(0, 8) : filters, defaultPeriod: preset, timeGrain: grain };
+  // the FRM report has a fixed filter panel (ProcDNA FRM report layout)
+  return { pages, filters: frm ? filters.slice(0, 1 + frm.filters.length) : filters, defaultPeriod: preset, timeGrain: grain, ...(frm?.geoLevels ? { geoLevels: frm.geoLevels } : {}) };
 }
 
 // ───────────────────────── Funnel-style overview ─────────────────────────

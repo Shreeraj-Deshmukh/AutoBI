@@ -2,7 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
+/* Client palette (Sanofi: purple #7A00E6 with black / grey) for the whole app, its dashboards and the Power BI export.
+   "brand" is the purple scale, "navy" the near-black ink scale. Keep in step with CLIENT_THEME in src/dashboard/format.ts. */
+:root {
+  color-scheme: light;
+  --navy-950: 10 10 10; --navy-900: 23 23 23; --navy-800: 38 38 38; --navy-700: 64 64 64; --navy-600: 82 82 82;
+  --brand-50: 246 239 255; --brand-100: 236 220 255; --brand-200: 217 185 255; --brand-300: 189 139 255; --brand-400: 157 77 250;
+  --brand-500: 138 31 240; --brand-600: 122 0 230; --brand-700: 100 0 189; --brand-800: 79 0 150; --brand-900: 59 0 112;
+}
 html, body, #root { height: 100%; }
 body { @apply bg-slate-50 text-slate-800 antialiased; font-feature-settings: 'cv11', 'ss01'; }
 * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }

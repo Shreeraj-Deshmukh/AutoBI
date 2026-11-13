@@ -7,7 +7,7 @@ import { engineFor } from '@/store/engineCache';
 import { buildModel, type ExportInput, type PbiModel } from './model';
 import { semanticModelFiles } from './tmdl';
 import { buildReport, SCHEMA, THEME_VERSION } from './report';
-import { BASE_THEME_NAME, CUSTOM_THEME_FILE, baseTheme, celestraTheme } from './theme';
+import { BASE_THEME_NAME, CUSTOM_THEME_FILE, LOGO_FILE, baseTheme, celestraTheme, logoSvg } from './theme';
 import { fileSafe, folderSafe, guid } from './names';
 
 /**
@@ -61,13 +61,14 @@ export function buildPowerBiProject(input: ExportInput & { spec: DashboardSpec }
     },
     resourcePackages: [
       { name: 'SharedResources', type: 'SharedResources', items: [{ name: BASE_THEME_NAME, path: `BaseThemes/${BASE_THEME_NAME}.json`, type: 'BaseTheme' }] },
-      { name: 'RegisteredResources', type: 'RegisteredResources', items: [{ name: CUSTOM_THEME_FILE, path: CUSTOM_THEME_FILE, type: 'CustomTheme' }] },
+      { name: 'RegisteredResources', type: 'RegisteredResources', items: [{ name: CUSTOM_THEME_FILE, path: CUSTOM_THEME_FILE, type: 'CustomTheme' }, { name: LOGO_FILE, path: LOGO_FILE, type: 'Image' }] },
     ],
     settings: { useStylableVisualContainerHeader: true, defaultDrillFilterOtherVisuals: true, allowChangeFilterTypes: true, useEnhancedTooltips: true, useDefaultAggregateDisplayName: true },
   });
   for (const [path, content] of Object.entries(report.files)) files[`${R}/definition/${path}`] = json(content);
   files[`${R}/StaticResources/SharedResources/BaseThemes/${BASE_THEME_NAME}.json`] = json(baseTheme);
   files[`${R}/StaticResources/RegisteredResources/${CUSTOM_THEME_FILE}`] = json(celestraTheme);
+  files[`${R}/StaticResources/RegisteredResources/${LOGO_FILE}`] = logoSvg;
 
   // ── semantic model
   files[`${S}/.platform`] = json(platform('SemanticModel', input.name));

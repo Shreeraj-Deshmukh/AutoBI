@@ -2,7 +2,7 @@ import type { Row } from '@/types';
 import { seeded, pad } from './util';
 
 /**
- * SYNTHETIC SAMPLE DATA — deterministic (seeded) so KPI totals, charts and
+ * SYNTHETIC SAMPLE DATA â€” deterministic (seeded) so KPI totals, charts and
  * automated tests are reproducible. This is not real client data.
  *
  * A handful of realistic data-quality issues are deliberately included so the
@@ -41,13 +41,13 @@ export function generateSampleData(): SampleBundle {
   if (cache) return cache;
   const r = seeded(20251103);
 
-  // ── Account Master ──
+  // â”€â”€ Account Master â”€â”€
   const accounts: Row[] = [];
   const territories: { region: string; territory: string; states: string[] }[] = [];
   for (const [region, terrs] of Object.entries(REGIONS)) for (const [territory, states] of Object.entries(terrs)) territories.push({ region, territory, states });
   const usedNames = new Set<string>();
   for (let i = 1; i <= 240; i++) {
-    const t = territories[(i * 5) % territories.length]; // 5 is coprime with 14 → all territories used
+    const t = territories[(i * 5) % territories.length]; // 5 is coprime with 14 â†’ all territories used
     let name = '';
     do name = `Dr. ${r.pick(FIRST)} ${r.pick(LAST)}`;
     while (usedNames.has(name));
@@ -64,7 +64,7 @@ export function generateSampleData(): SampleBundle {
     });
   }
 
-  // ── Campaign Master ──
+  // â”€â”€ Campaign Master â”€â”€
   const campaignDefs: [string, string, number, number][] = [
     ['CardioPlus Launch', 'Product Launch', 0, 120],
     ['Winter Clinical Data Series', 'Education', 30, 150],
@@ -89,7 +89,7 @@ export function generateSampleData(): SampleBundle {
     Awareness: ['Patient Support Program', 'Formulary Update'],
   };
 
-  // ── Call Activity ──
+  // â”€â”€ Call Activity â”€â”€
   const calls: Row[] = [];
   const segOf = (tier: string) =>
     tier === 'Tier 1'
@@ -132,7 +132,7 @@ export function generateSampleData(): SampleBundle {
   });
   calls.push({ ...calls[120] }, { ...calls[2400] });
 
-  // ── Email Activity ──
+  // â”€â”€ Email Activity â”€â”€
   const emails: Row[] = [];
   let emailN = 0;
   for (let ci = 0; ci < campaigns.length; ci++) {
@@ -181,7 +181,7 @@ export const SAMPLE_FILES = [
 export const SAMPLE_NARRATIVE =
   'Build a dashboard to monitor HCP engagement across regions. I want to understand calls made by different account segments, compare activity by account tier, track email campaign performance, and identify changes in engagement over time. The dashboard should allow filtering by region, territory, call type, and reporting period.';
 
-// ───────────────────────── Retail demo kit (second domain) ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Retail demo kit (second domain) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /**
  * SYNTHETIC retail sales data used to show Celestra is not tied to one domain.
  * Includes deliberate issues: 3 sales reference an unknown Product_ID, 8 rows have a blank Channel.
@@ -227,7 +227,7 @@ export function generateRetailData() {
 export const RETAIL_NARRATIVE =
   'Build a retail performance dashboard. Track net sales revenue and number of transactions over time, monthly, and compare with the previous period. Show sales by region, by product category and by channel, and identify top stores and top products. Track refund rate. Filter by region, category, channel and reporting period.';
 
-// ───────────────────────── Pharma brand performance (commercial analytics) ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Pharma brand performance (commercial analytics) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /**
  * Brand performance dataset in the shape of a typical life-sciences commercial
  * analytics engagement: HCP universe, territory alignment / roster, weekly
@@ -267,7 +267,7 @@ export function generatePharmaData() {
     const segment = decile >= 8 ? 'High Value' : decile >= 5 ? 'Grow' : decile >= 3 ? 'Maintain' : 'Low Potential';
     hcps.push({ HCP_ID: `H${100000 + i * 13}`, HCP_Name: `${name}, ${r.weighted([['MD', 80], ['DO', 10], ['NP', 10]] as const)}`, Specialty: r.weighted(SPEC), Decile: i % 47 === 0 ? null : decile, Segment: segment, Territory_ID: t.Territory_ID, State: String(t.State_Coverage).split('/')[i % String(t.State_Coverage).split('/').length], Target_Flag: decile >= 6 ? 'Target' : 'Non-Target' });
   }
-  // weekly Rx — 26 weeks ending Saturdays
+  // weekly Rx â€” 26 weeks ending Saturdays
   const firstWeek = Date.UTC(2026, 4, 2); // Sat 2 May 2026
   const rx: Row[] = [];
   for (let w = 0; w < 26; w++) {
@@ -309,7 +309,7 @@ export function generatePharmaData() {
 export const PHARMA_NARRATIVE =
   'Build a brand performance dashboard for Zentrava for the commercial leadership team and district managers. Track TRx and NRx weekly by product, compare with the previous period, and show prescriptions by region, by specialty and by HCP decile. Monitor field calls and call completion rate by channel and by segment, and identify the top prescribing HCPs. Filter by region, district, product, specialty and reporting period.';
 
-// ───────────────────────── Rare disease patient access (FRM patient funnel) ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Rare disease patient access (FRM patient funnel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /**
  * Patient-access dataset for a newly launched rare blood disorder therapy
  * ("Spacysla"): specialty pharmacy patient journey, payer / plan / PBM master,
@@ -474,8 +474,38 @@ export function generateAccessData() {
   });
   [55, 300, 640].forEach((k) => (journey[k].Plan_ID = 'PL-9999'));
   journey.sort((a, b) => String(a.Referral_Date).localeCompare(String(b.Referral_Date)));
-  const cases = generateFrmCases(journey, hcps, asOf);
-  return { journey, plans, hcps, territories, cases };
+
+  // Fields of the ProcDNA FRM report (product / market, sales territory, PSP, self-enrolment). Drawn from their own
+  // seed and added as extra columns, so every value above is unchanged.
+  const x = seeded(16180);
+  const products: Row[] = [
+    { Product_ID: 'PRD-01', Product_Name: 'Spacysla', Market: 'Hemophilia A' },
+    { Product_ID: 'PRD-02', Product_Name: 'Qalvora', Market: 'Cold Agglutinin Disease' },
+  ];
+  const productOf = new Map<string, string>();
+  for (const j of journey) {
+    const id = String(j.Patient_ID);
+    if (!productOf.has(id)) productOf.set(id, x.next() < 0.62 ? 'PRD-01' : 'PRD-02');
+  }
+  const withProduct = (j: Row): Row => {
+    const { HCP_ID, Plan_ID, ...rest } = j;
+    const { Patient_ID, ...tail } = rest;
+    return { Patient_ID, HCP_ID, Plan_ID, Product_ID: productOf.get(String(Patient_ID)) ?? null, ...tail };
+  };
+  const journeyOut: Row[] = journey.map(withProduct);
+  // two sales territories inside each FRM territory
+  const SALES_SUFFIX = ['North', 'South'];
+  const hcpsOut: Row[] = hcps.map((h) => {
+    const t = territories.find((k) => k.Territory_ID === h.Territory_ID)!;
+    return { ...h, Sales_Territory: `${t.Territory_Name} ${SALES_SUFFIX[x.int(0, 1)]}` };
+  });
+  const cases: Row[] = generateFrmCases(journey, hcps, asOf).map((c) => {
+    const { Plan_ID, Case_Type, ...rest } = c;
+    const { Case_ID, Patient_ID, HCP_ID, ...tail } = rest;
+    const psp = x.next() < 0.55;
+    return { Case_ID, Patient_ID, HCP_ID, Plan_ID, Product_ID: productOf.get(String(Patient_ID)) ?? null, Case_Type, PSP: psp ? 'Y' : 'N', Self_Enrolled: psp && x.next() < 0.35 ? 'Y' : 'N', ...tail };
+  });
+  return { journey: journeyOut, plans, hcps: hcpsOut, territories, cases, products };
 }
 
 /**
@@ -502,7 +532,7 @@ function generateFrmCases(journey: Row[], hcps: Row[], asOf: number): Row[] {
     if (close != null && close > asOf) close = null;
     if (close != null && close <= open) close = open + DAY_MS;
     if (close != null && close > asOf) close = null;
-    const status = close == null ? 'Open' : 'Closed';
+    let status = close == null ? 'Open' : 'Closed';
     let response: number | null = Math.round((r.int(0, 3) + (type === 'Appeals' ? 1 : 0)) * pace);
     if (close != null) response = Math.min(response, days(open, close));
     if (open + response * DAY_MS > asOf) response = null; // not yet actioned
@@ -512,6 +542,9 @@ function generateFrmCases(journey: Row[], hcps: Row[], asOf: number): Row[] {
     const escDate = escalated ? open + Math.min(age - 1, r.int(5, Math.max(5, age - 1))) * DAY_MS : null;
     const priority = escalated || (status === 'Open' && age > 21) ? 'High' : type === 'Appeals' || type === 'PA Support' ? r.weighted([['Medium', 60], ['High', 25], ['Low', 15]] as const) : r.weighted([['Low', 55], ['Medium', 45]] as const);
     const bucket = status !== 'Open' ? null : age <= 7 ? '0-7 days' : age <= 14 ? '8-14 days' : age <= 21 ? '15-21 days' : age <= 30 ? '22-30 days' : '30+ days';
+    const isOpen = status === 'Open';
+    // an open case that has been escalated is worked as "Escalated" (still part of the open backlog)
+    if (isOpen && escalated) status = 'Escalated';
     raw.push({
       Case_ID: '',
       Patient_ID: j.Patient_ID,
@@ -528,8 +561,8 @@ function generateFrmCases(journey: Row[], hcps: Row[], asOf: number): Row[] {
       Case_Close_Date: iso(close),
       FRM_Response_Days: response,
       Days_to_Resolution: close == null ? null : days(open, close),
-      Days_Open: status === 'Open' ? age : null,
-      Days_Since_Escalation: status === 'Open' && escDate != null ? days(escDate, asOf) : null,
+      Days_Open: isOpen ? age : null,
+      Days_Since_Escalation: isOpen && escDate != null ? days(escDate, asOf) : null,
       Aging_Bucket: bucket,
       Case_Details: detail,
     });
@@ -584,7 +617,7 @@ function generateFrmCases(journey: Row[], hcps: Row[], asOf: number): Row[] {
   return raw;
 }
 
-export const ACCESS_NARRATIVE = `Create a patient access dashboard for Spacysla, our newly launched rare disease therapy, for the Field Reimbursement Manager (FRM) team.
+export const ACCESS_NARRATIVE = `Create a patient access dashboard for our rare blood disorder therapies Spacysla (newly launched) and Qalvora, for the Field Reimbursement Manager (FRM) team.
 The dashboard should:
 - Track patients from prescription through therapy initiation.
 - Identify patients experiencing delays or drop-offs.
@@ -593,4 +626,4 @@ The dashboard should:
 - Identify HCPs associated with access challenges.
 - Give each FRM a case-level view: every open access case with the patient, HCP, payer, case type, priority, days open and where the patient is stuck.
 - Compare FRM performance across territories: case volume, closure rate, resolution time, response time and escalations.
-- Allow FRMs to filter by territory, HCP, and payer.`;
+- Allow FRMs to filter by territory, sales territory, market, product, account, payer and PBM.`;

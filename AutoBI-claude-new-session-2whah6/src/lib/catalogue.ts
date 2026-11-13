@@ -50,7 +50,8 @@ const ALIASES: Record<string, { of: string; note: string }> = {
 };
 
 const CLOSED = /^closed$/i;
-const OPEN = /^open$/i;
+/** Open backlog: "Open", plus open cases worked under escalation ("Escalated") or awaiting input ("Pending"). */
+const OPEN = /^(open|escalated|pending)$/i;
 const RECIPES: Recipe[] = [
   // ── case log
   { name: 'Total Cases Received', source: 'catalogue', table: 'case', kind: 'count', format: 'number' },

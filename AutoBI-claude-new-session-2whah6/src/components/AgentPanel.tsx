@@ -79,7 +79,7 @@ export default function AgentPanel({ p, agent, next, children }: { p: Project; a
         <Bot className="h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.8125rem] font-semibold">{meta.name}</div>
-          <div className="truncate text-[0.6875rem] text-blue-100/80">
+          <div className="truncate text-[0.6875rem] text-brand-100/80">
             {running ? <span className="flex items-center gap-1"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-300" />{latest.steps.find((s) => s.status === 'running')?.label ?? 'Working'}…</span> : latest ? latest.engine : 'Not yet run'}
           </div>
         </div>

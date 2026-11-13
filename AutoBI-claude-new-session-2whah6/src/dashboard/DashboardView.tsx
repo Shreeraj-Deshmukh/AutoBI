@@ -1,15 +1,16 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend, ScatterChart, Scatter, LabelList } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, Minus, Download, Search, ChevronDown, X, RotateCcw, ArrowUpDown, Layers, Maximize2, Info, Flag, ChevronRight } from 'lucide-react';
-import type { DashComponent, DashboardSpec, FieldRef, Foundation, PeriodPreset } from '@/types';
-import { Engine, type FilterState, type WideRow, display, splitRef, BLANK, UNMATCHED } from '@/lib/engine';
+import { ArrowDownRight, ArrowUpRight, Minus, Download, Search, ChevronDown, X, ArrowUpDown, Layers, Maximize2, Info, Flag, ChevronRight, FilterX, CalendarDays, TrendingUp, SearchCheck, ListChecks, type LucideIcon } from 'lucide-react';
+import type { DashComponent, DashboardSpec, FieldRef, Foundation, MeasureDef, PeriodPreset } from '@/types';
+import { Engine, type AxisLevel, type FilterState, type WideRow, axisOf, display, isMatrix, splitRef, BLANK, UNMATCHED, VALUE } from '@/lib/engine';
 import { PERIOD_LABELS, bucketLabel, bucketRange, fmtPeriod, parseDate } from '@/lib/dates';
 import { CARD_TYPES, cardWeight } from '@/agents/designAgent';
 import { cx, Modal } from '@/components/ui';
 import { download, toCsv } from '@/lib/util';
-import { PALETTE, fmtMeasure } from './format';
+import { CLIENT_THEME, PALETTE, fmtMeasure } from './format';
 import BrandLogo from '@/components/BrandLogo';
 import { fieldLabel } from '@/lib/fieldLabels';
+import { followGeo, geoName } from '@/lib/geoLevel';
 
 interface Ctx {
   engine: Engine;
@@ -24,7 +25,10 @@ interface Ctx {
 export default function DashboardView({ spec, engine, foundation, fullscreen, header, locked }: { spec: DashboardSpec; engine: Engine; foundation: Foundation; fullscreen?: boolean; header?: ReactNode; locked?: { field: FieldRef; values: string[]; user: string } }) {
   const [pageId, setPageId] = useState(spec.pages[0]?.id);
   const [f, setF] = useState<FilterState>({ period: spec.defaultPeriod, selections: {} });
-  const page = spec.pages.find((p) => p.id === pageId) ?? spec.pages[0];
+  const [geo, setGeo] = useState<FieldRef | undefined>(spec.geoLevels?.default);
+  const page0 = spec.pages.find((p) => p.id === pageId) ?? spec.pages[0];
+  const geoHere = !!(spec.geoLevels && page0 && spec.geoLevels.pages.includes(page0.id));
+  const page = useMemo(() => (page0 && geoHere && geo ? { ...page0, components: page0.components.map((c) => followGeo(c, spec, geo, foundation)) } : page0), [page0, geoHere, geo, spec, foundation]);
   const { current, previous } = engine.resolve(f); // period does not depend on locked rows
 
   // geographic / categorical hierarchy for drill-down (from Dim_Geography if present)
@@ -62,28 +66,44 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
 
   return (
     <div className={cx('flex flex-col', fullscreen ? 'min-h-screen bg-slate-100' : 'rounded-xl border border-slate-200 bg-slate-100')}>
-      <div className={cx('sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur', !fullscreen && 'rounded-t-xl')}>
+      <div className={cx('sticky top-0 z-20 border-b border-slate-200 bg-white', !fullscreen && 'rounded-t-xl')}>
         {header}
-        <div className="flex items-end justify-between gap-4 border-b border-slate-200 px-4 pt-2">
-          <div className="-mb-px flex min-w-0 flex-wrap gap-1" role="tablist">
+        {/* report banner: brand mark left, page tabs centred (ProcDNA report layout) */}
+        <div className={cx('relative flex min-h-[3.75rem] items-center gap-4 bg-gradient-to-r from-brand-900 via-brand-700 to-brand-500 px-4', !fullscreen && !header && 'rounded-t-xl')}>
+          <div className="shrink-0 rounded-md bg-white px-2 py-1"><BrandLogo className="h-7" /></div>
+          <div className="flex min-w-0 flex-1 flex-wrap justify-center gap-1" role="tablist">
             {spec.pages.map((p) => (
-              <button key={p.id} role="tab" aria-selected={p.id === page?.id} onClick={() => setPageId(p.id)} className={cx('whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium', p.id === page?.id ? 'border-brand-600 text-navy-900' : 'border-transparent text-slate-500 hover:text-slate-800')}>
+              <button key={p.id} role="tab" aria-selected={p.id === page?.id} onClick={() => setPageId(p.id)} className={cx('whitespace-nowrap border-b-2 px-3 py-3 text-sm', p.id === page?.id ? 'border-white font-semibold text-white' : 'border-transparent text-white/75 hover:text-white')}>
                 {p.name}
               </button>
             ))}
           </div>
-          <BrandLogo className="mb-1 shrink-0" />
+          <div className="w-24 shrink-0" />
         </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5" data-testid="filter-bar">
-          <PeriodFilter value={f.period} custom={f.custom} onChange={(period, custom) => setF({ ...f, period, custom })} />
-          {spec.filters.filter((x) => x.type === 'multi' && x.field).map((x) => (
-            locked?.values.length && x.field === locked.field ? <span key={x.id} className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500">{fieldLabel(foundation, x.field!)}: {locked.values.join(', ')}</span> : <MultiFilter key={x.id} label={fieldLabel(foundation, x.field!)} options={locked?.values.length ? engine.distinct(x.field!) : engine.distinct(x.field!)} value={f.selections[x.field!] ?? []} onChange={(v) => setF({ ...f, selections: { ...f.selections, [x.field!]: v } })} />
-          ))}
-          <button className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100" onClick={() => setF({ period: spec.defaultPeriod, selections: {} })}>
-            <RotateCcw className="h-3 w-3" /> Reset
-          </button>
+        <div className="flex items-start gap-3 bg-brand-50/60 px-4 py-3" data-testid="filter-bar">
+          <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-4 gap-y-2.5">
+            {geoHere && spec.geoLevels && (
+              <Labeled label="Geo Level">
+                <select className="input py-1.5 text-xs" value={geo} onChange={(e) => setGeo(e.target.value)} aria-label="Geo level" data-testid="geo-level">
+                  {spec.geoLevels.fields.map((g) => <option key={g} value={g}>{geoName(foundation, g)}</option>)}
+                </select>
+              </Labeled>
+            )}
+            {spec.filters.filter((x) => x.type === 'multi' && x.field).map((x) => (
+              <Labeled key={x.id} label={x.label || fieldLabel(foundation, x.field!)}>
+                {locked?.values.length && x.field === locked.field ? <div className="input truncate bg-slate-50 py-1.5 text-xs text-slate-500">{locked.values.join(', ')}</div> : <MultiFilter label={x.label || fieldLabel(foundation, x.field!)} options={engine.distinct(x.field!)} value={f.selections[x.field!] ?? []} onChange={(v) => setF({ ...f, selections: { ...f.selections, [x.field!]: v } })} />}
+              </Labeled>
+            ))}
+            <PeriodFilter value={f.period} custom={f.custom} onChange={(period, custom) => setF({ ...f, period, custom })} />
+          </div>
+          <div className="flex shrink-0 items-center gap-1 pt-5">
+            <span className="rounded p-1 text-brand-700" title={`Period: ${fmtPeriod(current)}${previous ? ` · compared with ${fmtPeriod(previous)}` : ''}`}><Info className="h-4 w-4" /></span>
+            <button className="rounded p-1 text-brand-700 hover:bg-white" onClick={() => setF({ period: spec.defaultPeriod, selections: {} })} title="Clear all filters" aria-label="Reset">
+              <FilterX className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 pb-2 text-[0.6875rem] text-slate-500">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-1.5 text-[0.6875rem] text-slate-500">
           {locked?.values.length ? <span className="chip bg-navy-800 text-white" data-testid="rls-badge">Viewing as {locked.user} · {fieldLabel(foundation, locked.field)} = {locked.values.join(', ')}</span> : null}
           <span>Period: <b className="text-slate-700">{fmtPeriod(current)}</b>{previous && <> · compared with {fmtPeriod(previous)}</>}</span>
           {active.map(([field, vals]) => (
@@ -123,22 +143,36 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
   );
 }
 
+/** Table header cell of dashboard tables: brand-coloured band (ProcDNA report tables). */
+const TH = 'px-3 py-2 text-left text-[0.75rem] font-semibold text-white bg-brand-700 whitespace-nowrap';
+
 // ───────────────────────────── filters ─────────────────────────────
-function PeriodFilter({ value, custom, onChange }: { value: PeriodPreset; custom?: { start?: string; end?: string }; onChange: (p: PeriodPreset, c?: { start?: string; end?: string }) => void }) {
+/** Filter panel cell: label above the control. */
+function Labeled({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <label className="text-[0.6875rem] font-medium text-slate-500">Period</label>
-      <select className="input w-auto py-1 text-xs" value={value} onChange={(e) => onChange(e.target.value as PeriodPreset, custom)} aria-label="Reporting period">
-        {(Object.keys(PERIOD_LABELS) as PeriodPreset[]).map((k) => <option key={k} value={k}>{PERIOD_LABELS[k]}</option>)}
-      </select>
-      {value === 'custom' && (
-        <>
-          <input type="date" className="input w-auto py-1 text-xs" value={custom?.start ?? ''} onChange={(e) => onChange('custom', { ...custom, start: e.target.value })} aria-label="Start date" />
-          <span className="text-xs text-slate-400">→</span>
-          <input type="date" className="input w-auto py-1 text-xs" value={custom?.end ?? ''} onChange={(e) => onChange('custom', { ...custom, end: e.target.value })} aria-label="End date" />
-        </>
-      )}
+    <div className="min-w-0">
+      <div className="mb-1 truncate text-[0.75rem] font-medium text-brand-700">{label}</div>
+      {children}
     </div>
+  );
+}
+
+function PeriodFilter({ value, custom, onChange }: { value: PeriodPreset; custom?: { start?: string; end?: string }; onChange: (p: PeriodPreset, c?: { start?: string; end?: string }) => void }) {
+  const off = value !== 'custom';
+  return (
+    <>
+      <Labeled label="Time Period">
+        <select className="input py-1.5 text-xs" value={value} onChange={(e) => onChange(e.target.value as PeriodPreset, custom)} aria-label="Reporting period">
+          {(Object.keys(PERIOD_LABELS) as PeriodPreset[]).map((k) => <option key={k} value={k}>{PERIOD_LABELS[k]}</option>)}
+        </select>
+      </Labeled>
+      <Labeled label="Custom Date">
+        <div className="flex gap-1.5">
+          <input type="date" disabled={off} className="input min-w-0 px-1.5 py-1.5 text-xs disabled:bg-slate-100" value={custom?.start ?? ''} onChange={(e) => onChange('custom', { ...custom, start: e.target.value })} aria-label="Start date" />
+          <input type="date" disabled={off} className="input min-w-0 px-1.5 py-1.5 text-xs disabled:bg-slate-100" value={custom?.end ?? ''} onChange={(e) => onChange('custom', { ...custom, end: e.target.value })} aria-label="End date" />
+        </div>
+      </Labeled>
+    </>
   );
 }
 
@@ -147,9 +181,9 @@ function MultiFilter({ label, options, value, onChange }: { label: string; optio
   const [q, setQ] = useState('');
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className={cx('flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs', value.length ? 'border-brand-300 bg-brand-50 text-brand-800' : 'border-slate-300 bg-white text-slate-700')} aria-label={`${label} filter`}>
-        {label}{value.length ? `: ${value.length === 1 ? value[0] : `${value.length} selected`}` : ': All'}
-        <ChevronDown className="h-3 w-3" />
+      <button onClick={() => setOpen(!open)} className={cx('flex w-full items-center justify-between gap-1 rounded-lg border bg-white px-2.5 py-1.5 text-left text-xs', value.length ? 'border-brand-400 text-brand-800' : 'border-slate-300 text-slate-700')} aria-label={`${label} filter`}>
+        <span className="truncate">{value.length ? (value.length === 1 ? value[0] : 'Multiple Selections') : 'All'}</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
       </button>
       {open && (
         <>
@@ -181,21 +215,50 @@ function notAffected(c: DashComponent, ctx: Ctx) {
   return fields.filter((fd) => c.measureIds.some((m) => !ctx.engine.applies(m, fd))).map((fd) => fieldLabel(ctx.foundation, fd));
 }
 
+/** Card icon (ProcDNA report cards carry one at the top right): rates trend, durations calendar, lists checklist. */
+function iconFor(c: DashComponent, m?: MeasureDef): LucideIcon {
+  if (c.type === 'records' || c.type === 'table') return ListChecks;
+  if (m?.format === 'percent') return TrendingUp;
+  if (m?.format === 'decimal' || /\b(days?|time)\b/i.test(c.title)) return CalendarDays;
+  return SearchCheck;
+}
+
+/** Card title in the brand colour, unit suffix such as "(Days)" lighter, divider below. */
+function CardHead({ c, m, sub, right }: { c: DashComponent; m?: MeasureDef; sub?: ReactNode; right?: ReactNode }) {
+  const Icon = iconFor(c, m);
+  const unit = c.title.match(/^(.*?)(\s*\([^)]*\))$/);
+  return (
+    <div className="flex items-start justify-between gap-2 border-b border-slate-200 pb-2">
+      <div className="min-w-0">
+        <div className="truncate text-[0.9375rem] font-semibold text-brand-800" title={c.title}>{unit ? <>{unit[1]}<span className="font-normal text-brand-400">{unit[2]}</span></> : c.title}</div>
+        {sub}
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {right}
+        <span className="rounded-md bg-brand-50 p-1 text-brand-600" aria-hidden><Icon className="h-4 w-4" /></span>
+      </div>
+    </div>
+  );
+}
+
 function Frame({ c, ctx, children, actions, onExport }: { c: DashComponent; ctx: Ctx; children: ReactNode; actions?: ReactNode; onExport?: () => void }) {
   const na = notAffected(c, ctx);
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white" data-testid="visual" data-title={c.title}>
-      <div className="flex items-start justify-between gap-2 px-4 pt-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-navy-900">{c.title}</div>
-          {c.description && <div className="truncate text-[0.6875rem] text-slate-500">{c.description}</div>}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {actions}
-          {onExport && <button onClick={onExport} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Export data (CSV)" aria-label={`Export ${c.title}`}><Download className="h-3.5 w-3.5" /></button>}
-        </div>
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white shadow-card" data-testid="visual" data-title={c.title}>
+      <div className="mx-4 pt-3">
+        <CardHead
+          c={c}
+          m={ctx.foundation.measures.find((x) => x.id === c.measureIds[0])}
+          sub={c.description && <div className="truncate text-[0.6875rem] text-slate-500">{c.description}</div>}
+          right={
+            <>
+              {actions}
+              {onExport && <button onClick={onExport} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Export data (CSV)" aria-label={`Export ${c.title}`}><Download className="h-3.5 w-3.5" /></button>}
+            </>
+          }
+        />
       </div>
-      <div className="min-h-0 flex-1 px-2 pb-2 pt-1">{children}</div>
+      <div className="min-h-0 flex-1 px-2 pb-2 pt-2">{children}</div>
       {na.length > 0 && <div className="flex items-center gap-1 border-t border-slate-100 px-4 py-1 text-[0.625rem] text-slate-400"><Info className="h-3 w-3" />Not affected by {na.join(', ')} filter (no relationship)</div>}
     </div>
   );
@@ -259,19 +322,19 @@ function KpiGroupCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
     ? ctx.engine.group(c.measureIds[0], c.dimension, ctx.f).filter((g) => g.key !== UNMATCHED).map((g) => ({ label: g.key, value: g.value as number | null, m: ms[0], key: g.key }))
     : c.measureIds.map((id, i) => ({ label: c.labels?.[i] ?? ms[i]?.name ?? '', value: ctx.engine.value(id, ctx.f, current), m: ms[i], key: undefined as string | undefined }));
   return (
-    <div className="flex w-full flex-col rounded-xl border border-slate-200 bg-white px-4 py-3" data-testid="kpi-group" data-title={c.title} title={c.description}>
-      <div className="text-[0.75rem] font-semibold text-navy-900">{c.title}</div>
-      <div className="mt-2 grid flex-1 items-end divide-x divide-slate-200" style={{ gridTemplateColumns: `repeat(${Math.max(1, items.length)}, minmax(0, 1fr))` }}>
+    <div className="flex w-full flex-col rounded-xl border border-slate-200 bg-gradient-to-br from-white to-brand-50/60 px-4 py-3 shadow-card" data-testid="kpi-group" data-title={c.title} title={c.description}>
+      <CardHead c={c} m={ms[0]} />
+      <div className="mt-3 grid flex-1 items-end divide-x divide-dashed divide-slate-300" style={{ gridTemplateColumns: `repeat(${Math.max(1, items.length)}, minmax(0, 1fr))` }}>
         {items.map((it) => {
           const body = (
             <>
-              <div className="truncate text-[0.6875rem] text-slate-500" title={it.label}>{it.label}</div>
-              <div className="text-xl font-semibold tabular-nums text-navy-900" data-testid="kpi-value" title={it.m?.logic}>{fmtMeasure(it.value, it.m)}</div>
+              <div className="truncate text-[0.75rem] text-slate-600" title={it.label}>{it.label}</div>
+              <div className="mt-1 text-[1.375rem] font-semibold tabular-nums text-navy-900" data-testid="kpi-value" title={it.m?.logic}>{fmtMeasure(it.value, it.m)}</div>
             </>
           );
           return it.key != null ? (
-            <button key={it.label} onClick={() => ctx.toggle(c.dimension!, it.key!)} className={cx('min-w-0 rounded px-2 text-center hover:bg-brand-50', selected.length && !selected.includes(it.key) && 'opacity-40')}>{body}</button>
-          ) : <div key={it.label} className="min-w-0 px-2 text-center">{body}</div>;
+            <button key={it.label} onClick={() => ctx.toggle(c.dimension!, it.key!)} className={cx('min-w-0 rounded px-3 text-left first:pl-0 hover:bg-brand-50', selected.length && !selected.includes(it.key) && 'opacity-40')}>{body}</button>
+          ) : <div key={it.label} className="min-w-0 px-3 text-left first:pl-0">{body}</div>;
         })}
         {!items.length && <div className="text-xs text-slate-400">No data</div>}
       </div>
@@ -285,23 +348,26 @@ function ExtremesCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   const g = ctx.engine.group(c.measureIds[0], c.dimension!, ctx.f).filter((x) => x.key !== UNMATCHED && x.key !== BLANK).sort((a, b) => b.value - a.value || a.key.localeCompare(b.key));
   const hi = g[0];
   const lo = g[g.length - 1];
+  // "Highest Chicago" over the value (ProcDNA scorecard)
   const cell = (head: string, name?: string, value?: string) => (
-    <div className="min-w-0 px-2 text-center first:pl-0">
-      <div className="text-[0.6875rem] text-slate-500">{head}</div>
-      <button className="mt-0.5 block w-full truncate text-xs font-semibold text-navy-900 hover:text-brand-700" title={name} onClick={() => name && ctx.toggle(c.dimension!, name)}>{name ?? '—'}</button>
-      {value != null && <div className="text-base font-semibold tabular-nums text-navy-900">{value}</div>}
-    </div>
+    <button className="min-w-0 px-3 text-left first:pl-0 hover:bg-brand-50/60" title={name} onClick={() => name && ctx.toggle(c.dimension!, name)}>
+      <div className="truncate text-[0.75rem] text-slate-600">{head} <span className="font-medium text-slate-800">{name ?? '—'}</span></div>
+      {value != null && <div className="mt-1 text-[1.375rem] font-semibold tabular-nums text-navy-900">{value}</div>}
+    </button>
   );
   let attr: string | undefined;
   if (c.topOnly && hi) attr = display(ctx.engine.table(c.dimension!, [c.measureIds[0]], [c.topOnly], ctx.f).find((r) => r.__key === hi.key)?.[c.topOnly] ?? null);
   return (
-    <div className="flex w-full flex-col rounded-xl border border-slate-200 bg-white px-4 py-3" data-testid="extremes" data-title={c.title}>
-      <div className="text-[0.75rem] font-semibold text-navy-900" title={m?.logic}>{c.title}</div>
-      <div className="mt-2 grid flex-1 grid-cols-2 items-end divide-x divide-slate-200">
+    <div className="flex w-full flex-col rounded-xl border border-slate-200 bg-gradient-to-br from-white to-brand-50/60 px-4 py-3 shadow-card" data-testid="extremes" data-title={c.title}>
+      <CardHead c={c} m={m} />
+      <div className="mt-3 grid flex-1 grid-cols-2 items-end divide-x divide-dashed divide-slate-300">
         {c.topOnly ? (
           <>
-            {cell(fieldLabel(ctx.foundation, c.dimension!), hi?.key, hi ? fmtMeasure(hi.value, m) : undefined)}
-            <div className="min-w-0 px-2 text-center"><div className="text-[0.6875rem] text-slate-500">{fieldLabel(ctx.foundation, c.topOnly)}</div><div className="mt-0.5 truncate text-xs font-semibold text-navy-900" title={attr}>{attr ?? '—'}</div></div>
+            <button className="min-w-0 px-3 text-left first:pl-0 hover:bg-brand-50/60" title={hi?.key} onClick={() => hi && ctx.toggle(c.dimension!, hi.key)}>
+              <div className="truncate text-[0.75rem] text-slate-600">{fieldLabel(ctx.foundation, c.dimension!)}</div>
+              <div className="mt-1 truncate text-base font-semibold text-navy-900">{hi?.key ?? '—'}</div>
+            </button>
+            <div className="min-w-0 px-3 text-left"><div className="truncate text-[0.75rem] text-slate-600">{fieldLabel(ctx.foundation, c.topOnly)}</div><div className="mt-1 truncate text-base font-semibold text-navy-900" title={attr}>{attr ?? '—'}</div></div>
           </>
         ) : (
           <>
@@ -322,6 +388,7 @@ function Visual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   if (c.type === 'extremes') return <ExtremesCard c={c} ctx={ctx} />;
   if (c.type === 'table') return <TableVisual c={c} ctx={ctx} />;
   if (c.type === 'line' || c.type === 'area') return <LineVisual c={c} ctx={ctx} />;
+  if (isMatrix(c)) return <MatrixVisual c={c} ctx={ctx} />;
   if (c.type === 'stacked') return <StackedVisual c={c} ctx={ctx} />;
   if (c.type === 'funnel') return <FunnelVisual c={c} ctx={ctx} />;
   return <CategoryVisual c={c} ctx={ctx} />;
@@ -346,7 +413,7 @@ function CategoryVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
     if (drill && lvl >= 0 && lvl < ctx.hierarchy.length - 1) ctx.drillTo(dim, key);
     else ctx.toggle(dim, key);
   };
-  const fill = (k: string, i: number) => (selected.length && !selected.includes(k) ? '#cbd5e1' : c.type === 'donut' ? PALETTE[i % PALETTE.length] : PALETTE[0]);
+  const fill = (k: string, i: number) => (selected.length && !selected.includes(k) ? CLIENT_THEME.deselected : c.type === 'donut' ? PALETTE[i % PALETTE.length] : PALETTE[0]);
   const rows = data.map((d) => ({ name: d.key, value: d.value }));
   const empty = !rows.length;
   return (
@@ -379,6 +446,7 @@ function CategoryVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
                 <Tooltip formatter={(v: number) => fmtMeasure(v, m)} cursor={{ fill: '#f1f5f9' }} />
                 <Bar isAnimationActive={false} dataKey="value" name={m?.name} radius={[0, 4, 4, 0]} onClick={(d) => click(String(d.name))} cursor="pointer">
                   {rows.map((r, i) => <Cell key={r.name} fill={fill(r.name, i)} />)}
+                  <LabelList dataKey="value" position="right" formatter={(v: number) => fmtMeasure(v, m, true)} style={{ fontSize: 10, fill: '#404040' }} />
                 </Bar>
               </BarChart>
             ) : (
@@ -396,6 +464,74 @@ function CategoryVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
         )}
       </div>
     </Frame>
+  );
+}
+
+/** Bar / stacked chart with a two-level axis (Territory › Product, Month › Product) and/or one bar per series value. */
+function MatrixVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
+  const m = ctx.foundation.measures.find((x) => x.id === c.measureIds[0]);
+  const axis = axisOf(c);
+  const { rows, series } = ctx.engine.matrix(c.measureIds[0], axis, c.series, ctx.f);
+  const text = (k: string, i: number) => { const a = axis[i]; return 'grain' in a ? bucketLabel(k, a.grain) : k; };
+  const data = rows.map((r) => ({ __k: r.keys.join(' · '), __keys: r.keys.map(text), __raw: r.keys, ...r.values }));
+  const keys = c.series ? series : [VALUE];
+  const stacked = c.type === 'stacked';
+  const outer = axis[0] && 'field' in axis[0] ? axis[0].field : undefined;
+  const selected = outer ? ctx.f.selections[outer] ?? [] : [];
+  const fieldName = (i: number) => { const a = axis[i]; return 'grain' in a ? `${a.grain[0].toUpperCase()}${a.grain.slice(1)}` : fieldLabel(ctx.foundation, a.field); };
+  const narrow = data.length > 10;
+  const valueLabels = stacked && data.length <= 16;
+  return (
+    <Frame c={c} ctx={ctx} onExport={() => exportRows(c.title, data.map((d) => ({ ...Object.fromEntries(axis.map((_, i) => [fieldName(i), d.__keys[i]])), ...Object.fromEntries(keys.map((k) => [k === VALUE ? m?.name ?? 'Value' : k, (d as Record<string, unknown>)[k]])) })))}>
+      <div className="h-80">
+        {!data.length ? <NoData /> : (
+          <ResponsiveContainer>
+            <BarChart data={data} margin={{ top: 12, right: 8, bottom: 4 }} barCategoryGap={stacked ? '18%' : '12%'}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" vertical={false} />
+              <XAxis dataKey="__k" interval={0} tickLine={false} height={axis.length > 1 ? (narrow ? 86 : 46) : narrow ? 62 : 26} tick={<AxisTick data={data} levels={axis.length} vertical={narrow} />} />
+              <YAxis tick={{ fontSize: 10 }} width={44} tickFormatter={(v: number) => fmtMeasure(v, m, true)} />
+              <Tooltip formatter={(v: number, n: string) => [fmtMeasure(v, m), n === VALUE ? m?.name : n]} labelFormatter={(_, p) => (p?.[0]?.payload?.__keys as string[] | undefined)?.join(' › ') ?? ''} cursor={{ fill: '#f5f5f5' }} />
+              {c.series && <Legend wrapperStyle={{ fontSize: 11 }} />}
+              {keys.map((k, i) => (
+                <Bar isAnimationActive={false} key={k} dataKey={k} name={k === VALUE ? m?.name : k} stackId={stacked ? 'a' : undefined} fill={PALETTE[i % PALETTE.length]} onClick={(d: { __raw?: string[] }) => outer && d.__raw && ctx.toggle(outer, d.__raw[0])} cursor={outer ? 'pointer' : undefined}>
+                  {outer && data.map((d) => <Cell key={d.__k} fill={selected.length && !selected.includes(d.__raw[0]) ? CLIENT_THEME.deselected : PALETTE[i % PALETTE.length]} />)}
+                  {valueLabels && <LabelList dataKey={k} position="center" formatter={(v: number) => (v ? fmtMeasure(v, m, true) : '')} style={{ fontSize: 9, fill: '#fff' }} />}
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </Frame>
+  );
+}
+
+/** Axis tick for a two-level axis: inner value under each bar, outer value centred under its group with a separator. */
+function AxisTick(props: { x?: number; y?: number; width?: number; visibleTicksCount?: number; index?: number; data: { __keys: string[] }[]; levels: number; vertical: boolean }) {
+  const { x = 0, y = 0, index = 0, data, levels, vertical } = props;
+  const band = (props.width ?? 0) / Math.max(1, props.visibleTicksCount ?? data.length);
+  const keys = data[index]?.__keys ?? [];
+  const inner = keys[levels - 1] ?? '';
+  const innerEl = vertical
+    ? <text x={0} y={0} dy={4} textAnchor="end" transform="rotate(-90)" fontSize={10} fill="#525252">{inner}</text>
+    : <text x={0} y={0} dy={12} textAnchor="middle" fontSize={10} fill="#525252">{inner}</text>;
+  if (levels < 2) return <g transform={`translate(${x},${y + (vertical ? 6 : 0)})`}>{innerEl}</g>;
+  const outer = keys[0];
+  const first = index === 0 || data[index - 1]?.__keys[0] !== outer;
+  let size = 0;
+  while (data[index + size]?.__keys[0] === outer) size++;
+  const innerH = vertical ? 58 : 18;
+  return (
+    <g>
+      <g transform={`translate(${x},${y + (vertical ? 6 : 0)})`}>{innerEl}</g>
+      {first && (
+        <>
+          <line x1={x - band / 2} x2={x - band / 2} y1={y} y2={y + innerH + 18} stroke="#d4d4d4" />
+          <text x={x - band / 2 + (size * band) / 2} y={y + innerH + 12} textAnchor="middle" fontSize={10.5} fontWeight={600} fill="#262626">{outer}</text>
+        </>
+      )}
+      {index === data.length - 1 && <line x1={x + band / 2} x2={x + band / 2} y1={y} y2={y + innerH + 18} stroke="#d4d4d4" />}
+    </g>
   );
 }
 
@@ -483,8 +619,8 @@ function TableVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   const dimLabel = fieldLabel(ctx.foundation, c.dimension!);
   const selected = ctx.f.selections[c.dimension!] ?? [];
   const head = (key: string, label: string, right = false) => (
-    <th key={key} className={cx('th cursor-pointer select-none hover:text-slate-800', right && 'text-right')} onClick={() => setSort({ key, dir: sort.key === key ? (sort.dir === 1 ? -1 : 1) : -1 })}>
-      <span className="inline-flex items-center gap-1">{label}<ArrowUpDown className={cx('h-3 w-3', sort.key === key ? 'text-brand-600' : 'text-slate-300')} /></span>
+    <th key={key} className={cx(TH, 'cursor-pointer select-none', right && 'text-right')} onClick={() => setSort({ key, dir: sort.key === key ? (sort.dir === 1 ? -1 : 1) : -1 })}>
+      <span className="inline-flex items-center gap-1">{label}<ArrowUpDown className={cx('h-3 w-3', sort.key === key ? 'text-white' : 'text-white/40')} /></span>
     </th>
   );
   return (
@@ -506,7 +642,7 @@ function TableVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
               {head('__key', dimLabel)}
               {attrs.map((a) => head(a, fieldLabel(ctx.foundation, a)))}
               {ms.map((m) => head(m.id, m.name, true))}
-              {c.flags && <th className="th text-center">Priority Flag</th>}
+              {c.flags && <th className={cx(TH, 'text-center')}>Priority Flag</th>}
             </tr>
           </thead>
           <tbody>
@@ -595,10 +731,10 @@ function RecordsVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
       actions={
         <div className="flex items-center gap-2">
           {c.toggle && (
-            <div className="flex items-center rounded-lg border border-slate-200 p-0.5 text-[0.6875rem]" role="group" aria-label="Case list view">
-              <button className={cx('rounded-md px-2 py-0.5', !narrow ? 'bg-navy-800 text-white' : 'text-slate-600')} onClick={() => setNarrow(false)}>All ({all.length})</button>
-              <button className={cx('rounded-md px-2 py-0.5', narrow ? 'bg-navy-800 text-white' : 'text-slate-600')} onClick={() => setNarrow(true)} data-testid="records-toggle">{c.toggle.label} ({toggled.length})</button>
-            </div>
+            <select className="input w-auto py-1 text-xs" value={narrow ? 'narrow' : 'all'} onChange={(e) => setNarrow(e.target.value === 'narrow')} aria-label="Case list view" data-testid="records-toggle">
+              <option value="all">{c.toggle.allLabel ?? 'All'} ({all.length})</option>
+              <option value="narrow">{c.toggle.label} ({toggled.length})</option>
+            </select>
           )}
           <div className="relative">
             <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-slate-400" />
@@ -612,8 +748,8 @@ function RecordsVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
           <thead className="sticky top-0 z-10">
             <tr>
               {cols.map((k) => (
-                <th key={k} className="th cursor-pointer select-none whitespace-nowrap hover:text-slate-800" onClick={() => setSort({ key: k, dir: sort.key === k ? (sort.dir === 1 ? -1 : 1) : -1 })}>
-                  <span className="inline-flex items-center gap-1">{label(k)}<ArrowUpDown className={cx('h-3 w-3', sort.key === k ? 'text-brand-600' : 'text-slate-300')} /></span>
+                <th key={k} className={cx(TH, 'cursor-pointer select-none whitespace-nowrap')} onClick={() => setSort({ key: k, dir: sort.key === k ? (sort.dir === 1 ? -1 : 1) : -1 })}>
+                  <span className="inline-flex items-center gap-1">{label(k)}<ArrowUpDown className={cx('h-3 w-3', sort.key === k ? 'text-white' : 'text-white/40')} /></span>
                 </th>
               ))}
             </tr>
@@ -686,23 +822,30 @@ function RecordDetail({ w, cols, ctx, onClose }: { w: WideRow; cols: FieldRef[];
 /** Two measures per category, e.g. FRM response time (x) against case volume (y) by territory. */
 function ScatterVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   const [mx, my] = c.measureIds.map((id) => ctx.foundation.measures.find((x) => x.id === id));
-  const ys = new Map(ctx.engine.group(c.measureIds[1], c.dimension!, ctx.f).map((g) => [g.key, g.value]));
-  const pts = ctx.engine.group(c.measureIds[0], c.dimension!, ctx.f).filter((g) => ys.has(g.key) && g.key !== UNMATCHED).map((g) => ({ name: g.key, x: g.value, y: ys.get(g.key)! }));
+  // one point per category (and per series value, coloured by series)
+  const ax: AxisLevel[] = [{ field: c.dimension! }];
+  const xs = ctx.engine.matrix(c.measureIds[0], ax, c.series, ctx.f);
+  const ys = ctx.engine.matrix(c.measureIds[1], ax, c.series, ctx.f);
+  const yOf = new Map(ys.rows.map((r) => [r.keys[0], r.values]));
+  const groups = (c.series ? xs.series : [VALUE]).map((s) => ({ s, pts: xs.rows.filter((r) => r.values[s] != null && yOf.get(r.keys[0])?.[s] != null).map((r) => ({ name: r.keys[0], x: r.values[s], y: yOf.get(r.keys[0])![s] })) })).filter((g) => g.pts.length);
   const selected = ctx.f.selections[c.dimension!] ?? [];
   return (
-    <Frame c={c} ctx={ctx} onExport={() => exportRows(c.title, pts.map((p) => ({ [fieldLabel(ctx.foundation, c.dimension!)]: p.name, [mx?.name ?? 'x']: p.x, [my?.name ?? 'y']: p.y })))}>
-      <div className="h-72">
-        {!pts.length ? <NoData /> : (
+    <Frame c={c} ctx={ctx} onExport={() => exportRows(c.title, groups.flatMap((g) => g.pts.map((p) => ({ [fieldLabel(ctx.foundation, c.dimension!)]: p.name, ...(c.series ? { [fieldLabel(ctx.foundation, c.series)]: g.s } : {}), [mx?.name ?? 'x']: p.x, [my?.name ?? 'y']: p.y }))))}>
+      <div className="h-80">
+        {!groups.length ? <NoData /> : (
           <ResponsiveContainer>
-            <ScatterChart margin={{ top: 12, right: 24, bottom: 18, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <ScatterChart margin={{ top: 12, right: 24, bottom: c.series ? 8 : 18, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
               <XAxis type="number" dataKey="x" name={mx?.name} tick={{ fontSize: 10 }} label={{ value: mx?.name, position: 'insideBottom', offset: -10, fontSize: 10 }} domain={['auto', 'auto']} />
-              <YAxis type="number" dataKey="y" name={my?.name} tick={{ fontSize: 10 }} width={44} domain={['auto', 'auto']} />
+              <YAxis type="number" dataKey="y" name={my?.name} tick={{ fontSize: 10 }} width={44} domain={['auto', 'auto']} label={{ value: my?.name, angle: -90, position: 'insideLeft', fontSize: 10, dy: 40 }} />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v: number, n: string) => fmtMeasure(v, n === mx?.name ? mx : my)} labelFormatter={() => ''} />
-              <Scatter isAnimationActive={false} data={pts} onClick={(d: { name?: string }) => d.name && ctx.toggle(c.dimension!, d.name)} cursor="pointer">
-                {pts.map((p) => <Cell key={p.name} fill={selected.length && !selected.includes(p.name) ? '#cbd5e1' : PALETTE[0]} />)}
-                <LabelList dataKey="name" position="top" style={{ fontSize: 9, fill: '#475569' }} />
-              </Scatter>
+              {c.series && <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 11, paddingBottom: 6 }} />}
+              {groups.map((g, i) => (
+                <Scatter isAnimationActive={false} key={g.s} name={g.s === VALUE ? fieldLabel(ctx.foundation, c.dimension!) : g.s} data={g.pts} fill={PALETTE[i % PALETTE.length]} onClick={(d: { name?: string }) => d.name && ctx.toggle(c.dimension!, d.name)} cursor="pointer">
+                  {g.pts.map((p) => <Cell key={p.name} fill={selected.length && !selected.includes(p.name) ? CLIENT_THEME.deselected : PALETTE[i % PALETTE.length]} />)}
+                  <LabelList dataKey="name" position="top" style={{ fontSize: 9, fill: '#525252' }} />
+                </Scatter>
+              ))}
             </ScatterChart>
           </ResponsiveContainer>
         )}
@@ -742,7 +885,7 @@ function DrilldownVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
                   {rows.map((r) => (
                     <button key={r.key} onClick={() => i < levels.length - 1 && click(i, r.key)} className={cx('block w-full rounded px-1 py-0.5 text-left', i < levels.length - 1 ? 'hover:bg-slate-50' : 'cursor-default', path[i] === r.key && 'bg-brand-50 ring-1 ring-brand-200')} data-testid="drill-node">
                       <div className="flex justify-between gap-2 text-[0.6875rem]"><span className="truncate text-slate-700">{r.key}</span><span className="tabular-nums text-slate-500">{fmtMeasure(r.value, m)}</span></div>
-                      <div className="mt-0.5 h-2 rounded-sm bg-slate-100"><div className="h-full rounded-sm" style={{ width: `${(r.value / top) * 100}%`, background: path[i] === r.key ? PALETTE[0] : '#93b4fd' }} /></div>
+                      <div className="mt-0.5 h-2 rounded-sm bg-slate-100"><div className="h-full rounded-sm" style={{ width: `${(r.value / top) * 100}%`, background: path[i] === r.key ? PALETTE[0] : CLIENT_THEME.soft }} /></div>
                     </button>
                   ))}
                   {!rows.length && <div className="text-[0.6875rem] text-slate-400">No data</div>}

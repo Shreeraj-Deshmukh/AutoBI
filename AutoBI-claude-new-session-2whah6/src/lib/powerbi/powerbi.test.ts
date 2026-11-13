@@ -58,6 +58,7 @@ describe('Power BI export – Sanofi FRM kit', () => {
     { name: 'hcps', rows: d.hcps },
     { name: 'frm_territories', rows: d.territories },
     { name: 'frm_cases', rows: d.cases },
+    { name: 'product_master', rows: d.products },
   ];
   const r = runDemoPipeline('Sanofi FRM', ACCESS_NARRATIVE, tables);
   const x = r.pbi;
@@ -65,7 +66,8 @@ describe('Power BI export – Sanofi FRM kit', () => {
   it('writes a complete PBIP project', () => {
     const files = Object.keys(x.files);
     expect(files).toEqual(expect.arrayContaining(['Sanofi_FRM.pbip', 'Sanofi_FRM.Report/definition.pbir', 'Sanofi_FRM.Report/definition/report.json', 'Sanofi_FRM.Report/definition/pages/pages.json', 'Sanofi_FRM.SemanticModel/definition.pbism', 'Sanofi_FRM.SemanticModel/definition/model.tmdl', 'Sanofi_FRM.SemanticModel/definition/relationships.tmdl', 'README.txt']));
-    expect(x.summary).toMatchObject({ tables: 7, pages: r.build.spec.pages.length });
+    // 6 data tables + Dim_Date + Reporting Period + the Geo Level field parameter
+    expect(x.summary).toMatchObject({ tables: 9, pages: r.build.spec.pages.length });
     expect(JSON.parse(x.files['Sanofi_FRM.Report/definition.pbir']).datasetReference.byPath.path).toBe('../Sanofi_FRM.SemanticModel');
   });
 
@@ -82,8 +84,11 @@ describe('Power BI export – Sanofi FRM kit', () => {
     const components = r.build.spec.pages.flatMap((p) => p.components);
     const types = visualTypes(x);
     expect(x.warnings.filter((w) => /skipped/.test(w))).toEqual([]);
-    expect(types.filter((t) => !['textbox', 'slicer'].includes(t))).toHaveLength(components.length);
-    const builtIn = ['card', 'multiRowCard', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox'];
+    expect(types.filter((t) => !['textbox', 'slicer', 'image'].includes(t))).toHaveLength(components.length);
+    // one client logo per page
+    expect(types.filter((t) => t === 'image')).toHaveLength(r.build.spec.pages.length);
+    expect(x.files['Sanofi_FRM.Report/StaticResources/RegisteredResources/ClientLogo.svg']).toMatch(/^<\?xml[\s\S]*<svg/);
+    const builtIn = ['card', 'multiRowCard', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image'];
     expect(types.filter((t) => !builtIn.includes(t))).toEqual([]);
   });
 
@@ -94,7 +99,7 @@ describe('Power BI export – Sanofi FRM kit', () => {
       const out = x.model.measureOf.get(def.id)!;
       return x.model.table(out.table)!.measures.find((k) => k.name === out.name)!;
     };
-    expect(m('Open Case Backlog').expression).toMatch(/^CALCULATE\(COUNTA\('Fact_Case_Activity'\[Case ID\]\), KEEPFILTERS\('Fact_Case_Activity'\[Case Status\] = "Open"\), USERELATIONSHIP\('Dim_Date'\[Date\], 'Fact_Case_Activity'\[Case Open Date\]\)\)$/);
+    expect(m('Open Case Backlog').expression).toMatch(/^CALCULATE\(COUNTA\('Fact_Case_Activity'\[Case ID\]\), KEEPFILTERS\('Fact_Case_Activity'\[Case Status\] IN \{("Open", "Escalated"|"Escalated", "Open")\}\), USERELATIONSHIP\('Dim_Date'\[Date\], 'Fact_Case_Activity'\[Case Open Date\]\)\)$/);
     expect(m('Case Closure Rate (%)').expression).toMatch(/^DIVIDE\(\[.+\], \[.+\]\)$/);
     expect(m('Case Closure Rate (%)').formatString).toBe('0.0%');
     expect(m('Median Case Resolution Time (days)').expression).toMatch(/MEDIAN\(/);
@@ -128,6 +133,34 @@ describe('Power BI export – Sanofi FRM kit', () => {
     const period = slicers.find((s) => s.query.queryState.Values.projections[0].field.Column.Property === 'Reporting Period');
     expect(JSON.stringify(period.objects.general)).toContain("'Year to date'");
     expect(slicers.every((s) => s.syncGroup?.groupName)).toBe(true);
+  });
+
+  it('maps the ProcDNA FRM charts: two-level axis, series, and the Geo Level field parameter', () => {
+    const visuals = Object.entries(x.files).filter(([p]) => p.endsWith('visual.json')).map(([, c]) => JSON.parse(c).visual);
+    const titled = (t: string) => visuals.find((v) => JSON.stringify(v.visualContainerObjects?.title ?? '').includes(t) || JSON.stringify(v.visualContainerObjects?.title ?? '').includes(t.replace(/ /g, '')))!;
+    // field parameter table with NAMEOF references
+    const geo = x.model.tables.find((t) => t.kind === 'parameter')!;
+    expect(geo.name).toBe('Geo Level');
+    expect(geo.source).toMatch(/NAMEOF\('Dim_Territory'\[Region\]\)/);
+    expect(x.files['Sanofi_FRM.SemanticModel/definition/tables/Geo Level.tmdl']).toMatch(/extendedProperty ParameterMetadata[\s\S]*partition 'Geo Level' = calculated/);
+    // case volume: Region (from the parameter) › Product, series Case Status, both levels shown
+    const vol = titled('Case Volume by Geography');
+    expect(vol.visualType).toBe('columnChart');
+    expect(vol.query.queryState.Category.projections.map((p: { queryRef: string }) => p.queryRef)).toEqual(['Dim_Territory.Region', 'Dim_Product.Product Name']);
+    expect(vol.query.queryState.Category.fieldParameters[0]).toMatchObject({ index: 0, length: 1 });
+    expect(vol.query.queryState.Series.projections[0].queryRef).toBe('Fact_Case_Activity.Case Status');
+    expect(vol.expansionStates[0].levels).toHaveLength(2);
+    // closure rate: month › product, one bar per geography (the parameter)
+    const closure = titled('Case Closure Rate');
+    expect(closure.visualType).toBe('clusteredColumnChart');
+    expect(closure.query.queryState.Category.projections[0].queryRef).toBe('Dim_Date.Month');
+    expect(closure.query.queryState.Series.fieldParameters).toHaveLength(1);
+    // geo level slicer on the performance page only, defaulting to Region
+    const geoSlicers = visuals.filter((v) => v.visualType === 'slicer' && v.query.queryState.Values.projections[0].queryRef === 'Geo Level.Geo Level');
+    expect(geoSlicers).toHaveLength(1);
+    // the default selection is stored on the parameter's fields column, as the NAMEOF() text of Region
+    expect(JSON.stringify(geoSlicers[0].objects.general)).toContain('"Property":"Geo Level Fields"');
+    expect(JSON.stringify(geoSlicers[0].objects.general)).toContain("Dim_Territory''[Region]");
   });
 
   it('zips to a single download', () => {
