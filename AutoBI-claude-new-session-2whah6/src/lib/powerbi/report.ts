@@ -3,7 +3,7 @@ import { CARD_TYPES, cardWeight } from '@/agents/designAgent';
 import { PERIOD_LABELS } from '@/lib/dates';
 import { fieldLabel } from '@/lib/fieldLabels';
 import { CLIENT_THEME } from '@/dashboard/format';
-import { LOGO_FILE } from './theme';
+import { BANNER, BANNER_FILE, LOGO_FILE } from './theme';
 import { hasPeriodFilter } from '@/lib/periodFilter';
 import { axisOf, isMatrix } from '@/lib/engine';
 import { DATE_TABLE, PERIOD_COLUMN, PERIOD_PRESETS, PERIOD_TABLE, addFieldParameter, formatOf, type PbiModel } from './model';
@@ -27,7 +27,7 @@ export const SCHEMA = {
 /** Theme compatibility stamp (the PBIR schema versions this report is written against). */
 export const THEME_VERSION = { visual: '2.5.0', page: '2.0.0', report: '3.1.0' };
 
-const PAGE_W = 1280;
+export const PAGE_W = 1280;
 const MARGIN = 16;
 const GAP = 12;
 const COL = (PAGE_W - 2 * MARGIN - 11 * GAP) / 12;
@@ -533,7 +533,48 @@ function image(item: string): Json {
       general: [{ properties: { imageUrl: { expr: { ResourcePackageItem: { PackageName: 'RegisteredResources', PackageType: 1, ItemName: item } } } } }],
       imageScaling: [{ properties: { imageScalingType: lit("'Fit'") } }],
     },
-    visualContainerObjects: { title: [{ properties: { show: FALSE } }], background: [{ properties: { show: FALSE } }], border: [{ properties: { show: FALSE } }] },
+    visualContainerObjects: BARE,
+    drillFilterOtherVisuals: true,
+  };
+}
+
+/** Container without title, background, border or padding (banner pieces) */
+const BARE: Json = {
+  title: [{ properties: { show: FALSE } }],
+  background: [{ properties: { show: FALSE } }],
+  border: [{ properties: { show: FALSE } }],
+  dropShadow: [{ properties: { show: FALSE } }],
+  padding: [{ properties: { top: lit('0D'), bottom: lit('0D'), left: lit('0D'), right: lit('0D') } }],
+};
+
+const color = (hex: string) => ({ solid: { color: lit(`'${hex}'`) } });
+
+/**
+ * The page tabs of the web dashboard's banner: Power BI's page navigator (one tab per page, clicking one opens it),
+ * light text on the purple banner, the current page bold white and underlined.
+ */
+function pageNavigator(): Json {
+  // per-state formatting: Power BI keys the button states by selector id (default / hover / selected)
+  const inState = (id: string, properties: Json) => ({ properties, selector: { id } });
+  // (Desktop reads fill/outline "show" from the unkeyed entry, text from the keyed ones; checked in Desktop 2.159)
+  const states = (properties: Json) => [{ properties }, inState('hover', properties), inState('selected', properties)];
+  return {
+    visualType: 'pageNavigator',
+    objects: {
+      layout: [{ properties: { orientation: lit('0D'), cellPadding: lit('2D') } }],
+      shape: [{ properties: { tileShape: lit("'rectangle'") } }],
+      fill: states({ show: FALSE }),
+      outline: states({ show: FALSE }),
+      text: (['default', 'hover', 'selected'] as const).map((id) =>
+        inState(id, { show: TRUE, fontColor: color(id === 'default' ? BANNER.tab : BANNER.tabActive), fontFamily: lit("'Segoe UI'"), fontSize: lit('10D'), bold: id === 'selected' ? TRUE : FALSE, leftMargin: lit('4D'), rightMargin: lit('4D') }),
+      ),
+      accentBar: [
+        { properties: { show: FALSE } },
+        inState('hover', { show: FALSE }),
+        inState('selected', { show: TRUE, position: lit("'Bottom'"), width: lit('3D'), color: color(BANNER.tabActive) }),
+      ],
+    },
+    visualContainerObjects: BARE,
     drillFilterOtherVisuals: true,
   };
 }
@@ -573,11 +614,20 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     return name;
   };
 
-  // header: client logo, page title + description
-  let y = MARGIN;
-  const LOGO_W = 150;
-  place('logo', image(LOGO_FILE), { x: MARGIN, y: y + 4, width: LOGO_W, height: 40 });
-  place('title', textbox([{ text: page.name, size: 18, bold: true, color: CLIENT_THEME.primary }, ...(page.description ? [{ text: page.description, size: 10, color: CLIENT_THEME.muted }] : [])]), { x: MARGIN + LOGO_W + GAP, y, width: INNER - LOGO_W - GAP, height: page.description ? 64 : 44 });
+  // banner, as in the web dashboard: purple gradient, logo in a white chip on the left, page tabs centred
+  const chip = BANNER.chip;
+  place('banner', image(BANNER_FILE), { x: 0, y: 0, width: PAGE_W, height: BANNER.height });
+  place('logo', image(LOGO_FILE), { x: chip.x + 8, y: chip.y + 5, width: chip.width - 16, height: chip.height - 10 });
+  if (ctx.spec.pages.length > 1) {
+    // tabs share the banner right of the logo (up to 230 px each), centred in it
+    const left = chip.x + chip.width + GAP;
+    const room = PAGE_W - MARGIN - left;
+    const navW = Math.min(room, ctx.spec.pages.length * 230);
+    place('tabs', pageNavigator(), { x: left + Math.round((room - navW) / 2), y: 0, width: navW, height: BANNER.height });
+  }
+  // page title + description under the banner
+  let y = BANNER.height + GAP;
+  place('title', textbox([{ text: page.name, size: 18, bold: true, color: CLIENT_THEME.primary }, ...(page.description ? [{ text: page.description, size: 10, color: CLIENT_THEME.muted }] : [])]), { x: MARGIN, y, width: INNER, height: page.description ? 64 : 44 });
   y += (page.description ? 64 : 48) + 8;
 
   // slicer bar: reporting period, date range and the dashboard filters (synced across pages)

@@ -6,8 +6,8 @@ import { getRows } from '@/lib/rowStore';
 import { engineFor } from '@/store/engineCache';
 import { buildModel, type ExportInput, type PbiModel } from './model';
 import { semanticModelFiles } from './tmdl';
-import { buildReport, SCHEMA, THEME_VERSION } from './report';
-import { BASE_THEME_NAME, CUSTOM_THEME_FILE, LOGO_FILE, baseTheme, celestraTheme, logoSvg } from './theme';
+import { buildReport, PAGE_W, SCHEMA, THEME_VERSION } from './report';
+import { BANNER_FILE, BASE_THEME_NAME, CUSTOM_THEME_FILE, LOGO_FILE, bannerSvg, baseTheme, celestraTheme, logoSvg } from './theme';
 import { fileSafe, folderSafe, guid } from './names';
 
 /**
@@ -61,7 +61,7 @@ export function buildPowerBiProject(input: ExportInput & { spec: DashboardSpec }
     },
     resourcePackages: [
       { name: 'SharedResources', type: 'SharedResources', items: [{ name: BASE_THEME_NAME, path: `BaseThemes/${BASE_THEME_NAME}.json`, type: 'BaseTheme' }] },
-      { name: 'RegisteredResources', type: 'RegisteredResources', items: [{ name: CUSTOM_THEME_FILE, path: CUSTOM_THEME_FILE, type: 'CustomTheme' }, { name: LOGO_FILE, path: LOGO_FILE, type: 'Image' }] },
+      { name: 'RegisteredResources', type: 'RegisteredResources', items: [{ name: CUSTOM_THEME_FILE, path: CUSTOM_THEME_FILE, type: 'CustomTheme' }, { name: LOGO_FILE, path: LOGO_FILE, type: 'Image' }, { name: BANNER_FILE, path: BANNER_FILE, type: 'Image' }] },
     ],
     settings: { useStylableVisualContainerHeader: true, defaultDrillFilterOtherVisuals: true, allowChangeFilterTypes: true, useEnhancedTooltips: true, useDefaultAggregateDisplayName: true },
   });
@@ -69,6 +69,7 @@ export function buildPowerBiProject(input: ExportInput & { spec: DashboardSpec }
   files[`${R}/StaticResources/SharedResources/BaseThemes/${BASE_THEME_NAME}.json`] = json(baseTheme);
   files[`${R}/StaticResources/RegisteredResources/${CUSTOM_THEME_FILE}`] = json(celestraTheme);
   files[`${R}/StaticResources/RegisteredResources/${LOGO_FILE}`] = logoSvg;
+  files[`${R}/StaticResources/RegisteredResources/${BANNER_FILE}`] = bannerSvg(PAGE_W);
 
   // ── semantic model
   files[`${S}/.platform`] = json(platform('SemanticModel', input.name));

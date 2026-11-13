@@ -92,11 +92,14 @@ describe('Power BI export – Sanofi FRM kit', () => {
     const components = r.build.spec.pages.flatMap((p) => p.components);
     const types = visualTypes(x);
     expect(x.warnings.filter((w) => /skipped/.test(w))).toEqual([]);
-    expect(types.filter((t) => !['textbox', 'slicer', 'image'].includes(t))).toHaveLength(components.length);
-    // one client logo per page
-    expect(types.filter((t) => t === 'image')).toHaveLength(r.build.spec.pages.length);
+    expect(types.filter((t) => !['textbox', 'slicer', 'image', 'pageNavigator'].includes(t))).toHaveLength(components.length);
+    // per page, as in the web dashboard: the banner and the client logo, and the page tabs
+    const pages = r.build.spec.pages.length;
+    expect(types.filter((t) => t === 'image')).toHaveLength(2 * pages);
+    expect(types.filter((t) => t === 'pageNavigator')).toHaveLength(pages);
     expect(x.files['Sanofi_FRM.Report/StaticResources/RegisteredResources/ClientLogo.svg']).toMatch(/^<\?xml[\s\S]*<svg/);
-    const builtIn = ['card', 'multiRowCard', 'pivotTable', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image'];
+    expect(x.files['Sanofi_FRM.Report/StaticResources/RegisteredResources/ReportBanner.svg']).toMatch(/^<\?xml[\s\S]*<linearGradient/);
+    const builtIn = ['card', 'multiRowCard', 'pivotTable', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image', 'pageNavigator'];
     expect(types.filter((t) => !builtIn.includes(t))).toEqual([]);
   });
 
