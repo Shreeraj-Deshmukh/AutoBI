@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Plus, Pencil, Trash2, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
 import type { MeasureDef, Project } from '@/types';
 import StageLayout from '@/components/StageLayout';
 import { Button, Callout, Card, Badge, Tabs, Modal, Field, Empty, cx } from '@/components/ui';
+import { useJustAdded } from '@/lib/useJustAdded';
 import { approveFoundation, defineKpiFromText, deleteMeasure, isRunning, runFoundationAgent, updateFieldMap, updateMeasure } from '@/store/orchestrator';
 import { useEngine } from '@/store/engineCache';
 import { emptyFilters } from '@/lib/engine';
@@ -23,6 +24,13 @@ export default function FoundationStage({ p }: { p: Project }) {
   const engine = useEngine(p);
   const label = (id: string) => u.profiles.find((x) => x.datasetId === id)?.label ?? id;
   const approved = p.stages.foundation.status === 'approved';
+  // KPIs the user added come first (newest on top); the others keep the agent's order
+  const measures = useMemo(() => (f ? [...f.measures.filter((m) => m.addedAt).sort((a, b) => b.addedAt!.localeCompare(a.addedAt!)), ...f.measures.filter((m) => !m.addedAt)] : []), [f]);
+  const freshKpis = useJustAdded(useMemo(() => measures.map((m) => m.id), [measures]));
+  const kpiTable = useRef<HTMLTableSectionElement>(null);
+  useEffect(() => {
+    if (freshKpis.size) kpiTable.current?.querySelector('.just-added')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [freshKpis]);
 
   const main = !f ? (
     busy ? null : <Empty title="No reporting foundation yet" action={<Button variant="primary" onClick={() => runFoundationAgent(p.id)}>Run Reporting Foundation Agent</Button>}>The agent proposes a logical reporting model from the confirmed data understanding.</Empty>
@@ -76,12 +84,12 @@ export default function FoundationStage({ p }: { p: Project }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr><th className="th">KPI</th><th className="th">Suggested logic</th><th className="th text-right">Live value</th><th className="th">Requirement</th><th className="th">Assumptions</th><th className="th" /></tr></thead>
-              <tbody>
-                {f.measures.map((m) => {
+              <tbody ref={kpiTable}>
+                {measures.map((m) => {
                   const v = engine?.value(m.id, emptyFilters(), null);
                   return (
-                    <tr key={m.id}>
-                      <td className="td"><div className="font-medium text-navy-900">{m.name}{m.catalogueRef && <span title={`ProcDNA KPI Catalogue: ${m.catalogueRef}`}><Badge tone="blue" className="ml-1.5">catalogue</Badge></span>}{m.userModified && <Badge tone="violet" className="ml-1.5">edited</Badge>}</div><div className="text-[0.6875rem] text-slate-500">{m.description}</div></td>
+                    <tr key={m.id} className={cx(freshKpis.has(m.id) && 'just-added')}>
+                      <td className="td"><div className="font-medium text-navy-900">{m.name}{m.catalogueRef && <span title={`ProcDNA KPI Catalogue: ${m.catalogueRef}`}><Badge tone="blue" className="ml-1.5">catalogue</Badge></span>}{m.addedAt ? <Badge tone="violet" className="ml-1.5">added by you</Badge> : m.userModified && <Badge tone="violet" className="ml-1.5">edited</Badge>}</div><div className="text-[0.6875rem] text-slate-500">{m.description}</div></td>
                       <td className="td font-mono text-[0.6875rem] text-slate-700">{m.logic}</td>
                       <td className="td text-right tabular-nums">{v == null ? <span className="text-red-600">n/a</span> : m.format === 'percent' ? `${v.toFixed(1)}%` : fmtNumber(v, m.format === 'decimal' ? 2 : 0)}</td>
                       <td className="td text-xs">{m.requirementRef ? <Badge tone="green">{m.requirementRef}</Badge> : <span className="text-slate-400">Derived</span>}</td>

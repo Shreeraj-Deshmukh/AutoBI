@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Target, Gauge, Layers3, Filter, LayoutGrid, FileCheck2, CheckCircle2, RefreshCw, Scale, BarChart3, Database } from 'lucide-react';
 import type { Project, RequirementSection } from '@/types';
@@ -6,6 +6,7 @@ import StageLayout from '@/components/StageLayout';
 import Chat from '@/components/Chat';
 import EditableList from '@/components/EditableList';
 import { Button, Badge, Empty } from '@/components/ui';
+import { useJustAdded } from '@/lib/useJustAdded';
 import { analyseRequirements, answerClarification, approveRequirements, chat, editRequirementItems, generateRequirementSpec, isRunning } from '@/store/orchestrator';
 
 const ic = 'h-4 w-4 text-brand-600';
@@ -28,6 +29,17 @@ export default function RequirementsStage({ p }: { p: Project }) {
   // one section open at a time keeps the page readable
   const [openKey, setOpenKey] = useState<RequirementSection | null>('objectives');
   const st = p.stages.requirements.status;
+  // items are compared by section + text (an AI reply may rebuild the spec with new ids)
+  const keyOf = (s: RequirementSection, text: string) => `${s}${text.trim().toLowerCase()}`;
+  const keys = useMemo(() => (r ? SECTIONS.flatMap((s) => (r[s.key] ?? []).map((it) => keyOf(s.key, it.text))) : []), [r]);
+  const fresh = useJustAdded(keys);
+  const highlight = useMemo(() => new Set(r ? SECTIONS.flatMap((s) => (r[s.key] ?? []).filter((it) => fresh.has(keyOf(s.key, it.text))).map((it) => it.id)) : []), [fresh, r]);
+  // open the section that received the new items so they are visible
+  useEffect(() => {
+    const first = SECTIONS.find((s) => (r?.[s.key] ?? []).some((it) => highlight.has(it.id)));
+    if (first) setOpenKey(first.key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh]);
 
   const main = !r ? (
     busy ? null : <Empty icon={<FileCheck2 className="h-5 w-5" />} title="No requirements yet">Describe the dashboard in the assistant on the right.</Empty>
@@ -60,6 +72,7 @@ export default function RequirementsStage({ p }: { p: Project }) {
             items={r[s.key] ?? []}
             placeholder={s.ph}
             onChange={(items) => editRequirementItems(p.id, s.key, items)}
+            highlight={highlight}
           />
         ))}
       </div>

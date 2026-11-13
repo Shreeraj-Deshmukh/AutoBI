@@ -827,7 +827,7 @@ export async function defineKpiFromText(pid: string, text: string) {
   mutate(pid, (p) => {
     const f = p.foundation!;
     const label = (id: string) => p.understanding?.profiles.find((x) => x.datasetId === id)?.label ?? id;
-    f.measures.push(...res.value.extra, { ...res.value.main, userModified: true });
+    f.measures.push(...res.value.extra, { ...res.value.main, userModified: true, addedAt: nowIso() });
     for (const x of f.measures) x.logic = measureLogic(x, f.measures, label);
     if (p.understanding) reconcileMappings(p.understanding, f);
     p.runs.unshift({ id: uid('run'), agentId: 'foundation', startedAt: nowIso(), finishedAt: nowIso(), status: res.aiError ? 'completed_with_warnings' : 'completed', engine: res.engine, summary: `Defined KPI "${res.value.main.name}" = ${f.measures.find((m) => m.id === res.value.main.id)?.logic}`, steps: [{ label: 'Interpreting KPI request', status: 'done' }, { label: 'Validating fields and values against the data', status: 'done' }], inputs: ['KPI request'], outputs: ['KPI definition'], warnings: res.aiError ? [`Azure AI Foundry call failed (${res.aiError}); the rule-based builder was used.`] : [], errors: [] });
@@ -858,7 +858,7 @@ export function updateMeasure(pid: string, m: MeasureDef) {
     const i = f.measures.findIndex((x) => x.id === m.id);
     const next = { ...m, userModified: true };
     if (i >= 0) f.measures[i] = next;
-    else f.measures.push(next);
+    else f.measures.push({ ...next, addedAt: nowIso() });
     const label = (id: string) => p.understanding?.profiles.find((x) => x.datasetId === id)?.label ?? id;
     for (const x of f.measures) x.logic = measureLogic(x, f.measures, label);
     if (p.understanding) reconcileMappings(p.understanding, f);

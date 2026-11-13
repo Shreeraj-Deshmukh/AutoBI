@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { GripVertical, Trash2, ArrowUp, ArrowDown, Calendar, ChevronDown } from 'lucide-react';
 import type { DashComponent, DashboardSpec, Foundation } from '@/types';
 import { cx } from '@/components/ui';
@@ -7,6 +7,7 @@ import { PERIOD_LABELS } from '@/lib/dates';
 import BrandLogo from '@/components/BrandLogo';
 import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
 import { PALETTE_TINTS as T } from './format';
+import { useJustAdded } from '@/lib/useJustAdded';
 
 /** Grid span (of 60) for a card: consecutive cards in a section share the row in proportion to the values they show. */
 function cardSpan(cs: DashComponent[], i: number) {
@@ -145,6 +146,22 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
   const mname = (id: string) => foundation.measures.find((m) => m.id === id)?.name ?? '⚠ missing KPI';
   const clone = () => JSON.parse(JSON.stringify(spec)) as DashboardSpec;
 
+  // briefly highlight what was just added (by the user or the design assistant)
+  const fresh = useJustAdded(useMemo(() => [...spec.pages.map((p) => `page:${p.id}`), ...spec.pages.flatMap((p) => p.components.map((c) => `cmp:${c.id}`)), ...spec.filters.map((f) => `flt:${f.id}`)], [spec]));
+  const isNew = (kind: 'page' | 'cmp' | 'flt', id: string) => fresh.has(`${kind}:${id}`);
+  const newPeriod = spec.filters.some((f) => f.type === 'period' && isNew('flt', f.id));
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!fresh.size) return;
+    // a visual added to another page: show that page
+    const target = spec.pages.find((p) => p.components.some((c) => isNew('cmp', c.id)));
+    if (target && target.id !== page.id && !readOnly) onPage(target.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh]);
+  useEffect(() => {
+    if (fresh.size) gridRef.current?.querySelector('.just-added')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [fresh, page.id]);
+
   const move = (id: string, toPageId: string, beforeId: string | null) => {
     const s = clone();
     const from = s.pages.find((p) => p.components.some((c) => c.id === id))!;
@@ -186,7 +203,7 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
                 onClick={() => onPage(p.id)}
                 onDragOver={(e) => { if (dragId && p.id !== page.id) e.preventDefault(); }}
                 onDrop={(e) => { e.preventDefault(); if (dragId) move(dragId, p.id, null); setDragId(null); }}
-                className={cx('whitespace-nowrap border-b-2 px-2.5 py-3 text-[0.8125rem]', p.id === page.id ? 'border-white font-semibold text-white' : 'border-transparent text-white/75 hover:text-white', dragId && p.id !== page.id && 'rounded-t bg-white/20')}
+                className={cx('whitespace-nowrap border-b-2 px-2.5 py-3 text-[0.8125rem]', isNew('page', p.id) && 'just-added-ring', p.id === page.id ? 'border-white font-semibold text-white' : 'border-transparent text-white/75 hover:text-white', dragId && p.id !== page.id && 'rounded-t bg-white/20')}
               >
                 {p.name} <span className="text-[0.625rem] text-white/60">({p.components.length})</span>
               </button>
@@ -197,12 +214,12 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
         <div className="flex flex-wrap items-center gap-2 bg-brand-50/60 px-4 py-2.5">
           {spec.geoLevels?.pages.includes(page.id) && <span className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600" data-testid="wf-geo">Geo Level: {fieldLabel(foundation, spec.geoLevels.default).replace(/ Name$/, '')}<ChevronDown className="h-3 w-3" /></span>}
           {spec.filters.filter((f) => f.type === 'multi').map((f) => (
-            <span key={f.id} className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600" data-testid="wf-filter">{f.label || (f.field ? fieldLabel(foundation, f.field) : '')}: All<ChevronDown className="h-3 w-3" /></span>
+            <span key={f.id} className={cx('flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600', isNew('flt', f.id) && 'just-added')} data-testid="wf-filter">{f.label || (f.field ? fieldLabel(foundation, f.field) : '')}: All<ChevronDown className="h-3 w-3" /></span>
           ))}
-          {spec.filters.some((x) => x.type === 'period') && <span className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600" data-testid="wf-period"><Calendar className="h-3 w-3" />{PERIOD_LABELS[spec.defaultPeriod]}<ChevronDown className="h-3 w-3" /></span>}
+          {spec.filters.some((x) => x.type === 'period') && <span className={cx('flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600', newPeriod && 'just-added')} data-testid="wf-period"><Calendar className="h-3 w-3" />{PERIOD_LABELS[spec.defaultPeriod]}<ChevronDown className="h-3 w-3" /></span>}
         </div>
       </div>
-      <div className="grid gap-3 p-4" style={{ gridTemplateColumns: 'repeat(60, minmax(0, 1fr))' }} onDragOver={(e) => dragId && e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (dragId && !overId) move(dragId, page.id, null); setDragId(null); setOverId(null); }}>
+      <div ref={gridRef} className="grid gap-3 p-4" style={{ gridTemplateColumns: 'repeat(60, minmax(0, 1fr))' }} onDragOver={(e) => dragId && e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (dragId && !overId) move(dragId, page.id, null); setDragId(null); setOverId(null); }}>
         {page.components.map((c, i) => (
           <Fragment key={c.id}>
           {c.section && c.section !== page.components[i - 1]?.section && <div style={{ gridColumn: 'span 60 / span 60' }} className="flex items-center gap-3 pt-1 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-navy-800">{c.section}<span className="h-px flex-1 bg-slate-300/70" /></div>}
@@ -216,7 +233,7 @@ export default function Wireframe({ spec, foundation, pageId, onPage, selected, 
             onDragLeave={() => setOverId(null)}
             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (dragId && dragId !== c.id) move(dragId, page.id, c.id); setDragId(null); setOverId(null); }}
             onClick={() => onSelect(c.id)}
-            className={cx('group relative cursor-pointer rounded-xl border bg-white p-3 transition', selected === c.id ? 'border-brand-500 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300', overId === c.id && 'border-l-4 border-l-brand-500', dragId === c.id && 'opacity-40')}
+            className={cx('group relative cursor-pointer rounded-xl border bg-white p-3 transition', isNew('cmp', c.id) && 'just-added just-added-shimmer', selected === c.id ? 'border-brand-500 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300', overId === c.id && 'border-l-4 border-l-brand-500', dragId === c.id && 'opacity-40')}
             data-testid="wf-component"
             data-title={c.title}
           >

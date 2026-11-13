@@ -308,6 +308,8 @@ export interface MeasureDef {
   assumptions: string[];
   requirementRef?: string;
   userModified?: boolean;
+  /** When the user added this KPI (Describe a KPI / Add KPI); such KPIs are listed first. */
+  addedAt?: string;
   /** Recipe this measure was bound from (ProcDNA KPI Catalogue metric, FRM report measure or helper). */
   catalogueRef?: string;
 }
