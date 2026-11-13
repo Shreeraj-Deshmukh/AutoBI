@@ -21,7 +21,8 @@ const METRICS: { re: RegExp; entity: string; kpis: string[]; dataset: string }[]
     dataset: 'Email activity (one row per email sent, with delivery and open status)',
   },
   { re: /\bcampaigns?\b/i, entity: 'campaign', kpis: [], dataset: 'Campaign master (campaign names, types and dates)' },
-  { re: /\b(sales|revenue)\b/i, entity: 'sale', kpis: ['Total sales'], dataset: 'Sales transactions' },
+  // "sales territory" / "sales rep" name a geography or role, not sales data
+  { re: /\b(sales|revenue)\b(?!\s+(territor|reps?\b|force|team|region|district|area))/i, entity: 'sale', kpis: ['Total sales'], dataset: 'Sales transactions' },
   { re: /\borders?\b/i, entity: 'order', kpis: ['Total orders'], dataset: 'Order transactions' },
   { re: /\btrx\b|\bnrx\b|\bprescriptions? (volume|data|trend|counts?|share)\b|\bscripts?\b/i, entity: 'prescription', kpis: ['Total TRx', 'Total NRx'], dataset: 'Prescription data (TRx / NRx by HCP, product and week)' },
   { re: /\btickets?\b|\bincidents?\b/i, entity: 'ticket', kpis: ['Total tickets'], dataset: 'Ticket / incident log' },
@@ -186,7 +187,8 @@ export function extractRequirements(text: string, info: Partial<ProjectInfo>): R
     add('pages', 'Field Reimbursement Management');
     add('pages', 'FRM Performance');
   }
-  add('pages', 'Executive Overview');
+  // FRM briefs lead with the two FRM report pages instead of a generic executive overview
+  if (!frmCases) add('pages', 'Executive Overview');
   for (const h of hits) {
     if (h.entity === 'call') add('pages', 'Call Analytics');
     else if (h.entity === 'email' && emailEngagement) add('pages', 'Email Engagement');

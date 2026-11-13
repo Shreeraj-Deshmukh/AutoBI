@@ -64,7 +64,8 @@ const isFrmCaseBrief = (text: string) => /\bFRMs?\b|field reimbursement/i.test(t
 const FRM_REQ_RULES = `This is a Field Reimbursement Manager (FRM) / case-management dashboard. FRMs work individual access cases: they need the case list (patient, HCP, payer, case type, priority, days open, where the patient is stuck), while managers compare territories.
 - Use these ProcDNA KPI Catalogue metric names verbatim for case KPIs where they fit: ${FRM_REQUIREMENT_KPIS.join('; ')}.
 - Other catalogue metrics you may use (verbatim): ${KPI_CATALOGUE.filter((m) => m.isKpi).map((m) => m.name).join('; ')}.
-- "pages": start with "Field Reimbursement Management" (FRM case workbench) and "FRM Performance" (territory deep dive).`;
+- "pages": start with "Field Reimbursement Management" (FRM case workbench) and "FRM Performance" (territory deep dive). Do NOT include an "Executive Overview" page.`;
+const isExecOverview = (name: string) => /^executive (overview|summary)$/i.test(name.trim());
 
 export async function aiExtractRequirements(narrative: string, info: ProjectInfo, base: RequirementSpec): Promise<RequirementSpec> {
   const brief = `Project: ${info.name}\nDomain: ${info.domain}\nObjective: ${info.objective}\nAudience: ${info.audience || '(not given)'}\nFrequency: ${info.frequency || '(not given)'}\nPeriod: ${info.period || '(not given)'}\nKey questions: ${info.keyQuestions.join('; ') || '(none)'}`;
@@ -76,6 +77,7 @@ export async function aiExtractRequirements(narrative: string, info: ProjectInfo
     // keep the catalogue KPIs and FRM pages the rules derived, in case the model left some out
     const lower = new Set(spec.kpis.map((k) => k.text.toLowerCase()));
     spec.kpis = [...spec.kpis, ...base.kpis.filter((k) => k.source === 'catalogue' && !lower.has(k.text.toLowerCase()))];
+    spec.pages = spec.pages.filter((x) => !isExecOverview(x.text));
     for (const pg of ['FRM Performance', 'Field Reimbursement Management']) if (!spec.pages.some((x) => x.text.toLowerCase() === pg.toLowerCase())) spec.pages = [{ id: uid('req'), text: pg, source: 'catalogue' }, ...spec.pages];
   }
   return spec;
@@ -285,7 +287,7 @@ export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spe
   const fields = u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => ({ column: c.name, label: fieldLabel(f, fref(p.datasetId, c.name)), dataset: p.label })));
   // pages from the ProcDNA FRM report template are laid out deterministically; the model designs the rest
   const templated = fallback.pages.filter((p) => p.template);
-  const templateNote = templated.length ? `\nThese pages are already built from the ProcDNA FRM report template — do NOT repeat them or their content; design 1–2 additional pages only (e.g. the patient access funnel and barriers): ${templated.map((p) => `"${p.name}" (${p.components.map((c) => c.title).join(', ')})`).join('; ')}.` : '';
+  const templateNote = templated.length ? `\nThese pages are already built from the ProcDNA FRM report template — do NOT repeat them or their content; design 1–2 additional pages only (e.g. the patient access funnel and barriers) and no "Executive Overview" page: ${templated.map((p) => `"${p.name}" (${p.components.map((c) => c.title).join(', ')})`).join('; ')}.` : '';
   const j = await chatJSON<{ pages?: { name?: string; description?: string; sections?: { name?: string; components?: CompJson[] }[] }[]; filters?: string[] }>(
     `You are the Dashboard Design Agent. Design a Power BI-style dashboard for the requirements using ONLY the measures and fields listed.${templateNote}
 Component types: kpi (one measure), funnel (2–6 count measures in stage order), bar, hbar (needs dimension; use topN 10 for long lists), donut (≤6 categories), line (time trend, 1–3 measures), table (dimension + measures; "threshold" keeps rows whose first measure is greater than it), stacked (dimension + series; only for count or sum measures — rates, ratios and averages cannot be stacked, use bar for them).
@@ -327,6 +329,8 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
       }
     }
     const name = String(pg.name ?? `Page ${pages.length + 1}`);
+    // FRM dashboards lead with the template pages; a generic executive overview is not wanted there
+    if (templated.length && isExecOverview(name)) continue;
     if (comps.length && !templated.some((t) => t.name.toLowerCase() === name.toLowerCase())) pages.push({ id: uid('pg'), name, description: String(pg.description ?? ''), components: comps });
   }
   if (valid < (templated.length ? 2 : 4)) throw new Error(`AI design had only ${valid} component(s) that match the model`);
