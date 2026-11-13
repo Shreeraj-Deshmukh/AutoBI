@@ -292,6 +292,8 @@ function flagMeasure(ctx: Ctx, c: DashComponent): FieldExpr | null {
 interface VisualSpec {
   visual: Json;
   filters?: Json[];
+  /** Adjusts the visual to its final width on the page (e.g. matrix column widths). */
+  fit?: (width: number) => void;
 }
 
 function chart(visualType: string, queryState: Json, objects: Json, title: string | Json, subtitle?: string, sort?: Json): Json {
@@ -353,7 +355,15 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
           subTotals: [{ properties: { rowSubtotals: FALSE, columnSubtotals: FALSE } }],
           grid: [{ properties: { gridVertical: TRUE, gridHorizontal: FALSE } }],
         };
-        return { visual: chart('pivotTable', state({ Columns: catRole(c.dimension, dim), Values: [projection(measures[0], ' ')] }), objects, title, sub, isOrdinalColumn(ctx, dim) ? sortBy(dim, 'Ascending') : sortBy(measures[0], 'Descending')) };
+        const visual = chart('pivotTable', state({ Columns: catRole(c.dimension, dim), Values: [projection(measures[0], ' ')] }), objects, title, sub, isOrdinalColumn(ctx, dim) ? sortBy(dim, 'Ascending') : sortBy(measures[0], 'Descending'));
+        const n = Math.max(1, ctx.model.table(dim.table)?.columns.find((k) => k.name === dim.property)?.distinct ?? 5);
+        // spread the categories over the full width of the card (Power BI would otherwise size them to their text)
+        const fit = (width: number) => {
+          const o = visual.objects as Json;
+          o.columnHeaders = [{ properties: { ...((o.columnHeaders as { properties: Json }[])[0].properties), autoSizeColumnWidth: FALSE } }];
+          o.columnWidth = [{ properties: { value: lit(`${Math.max(60, Math.floor((width - 28) / n))}D`) }, selector: { metadata: queryRefOf(measures[0]) } }];
+        };
+        return { visual, fit };
       }
       const values = measures.map((m, i) => projection(m, c.labels?.[i] ?? m.property));
       return { visual: chart('multiRowCard', state({ Values: values }), {}, c.title, sub) };
@@ -578,18 +588,31 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     if (fd.type === 'multi' && !f) ctx.warnings.push(`Filter "${fd.label}" was skipped: its field is not in the model.`);
     if (f) slicers.push({ json: slicer(f, { mode: 'Dropdown', header: fd.label || undefined }), width: 190 });
   }
-  let x = MARGIN;
   // tall enough for the header plus the date boxes of the Custom Date (between) slicer
   const SLICER_H = 76;
+  // wrap into rows by the slicers' natural widths, then stretch each row to the full page width
+  const lines: (typeof slicers)[] = [[]];
+  let used = 0;
   for (const s of slicers) {
-    if (x + s.width > PAGE_W - MARGIN) {
-      x = MARGIN;
-      y += SLICER_H + 8;
+    if (lines[lines.length - 1].length && used + s.width > INNER) {
+      lines.push([]);
+      used = 0;
     }
-    place('slicer', s.json, { x, y, width: s.width, height: SLICER_H });
-    x += s.width + GAP;
+    lines[lines.length - 1].push(s);
+    used += s.width + GAP;
   }
-  if (slicers.length) y += SLICER_H + GAP;
+  for (const line of lines.filter((l) => l.length)) {
+    const natural = line.reduce((sum, s) => sum + s.width, 0);
+    const free = INNER - GAP * (line.length - 1);
+    let x = MARGIN;
+    line.forEach((s, i) => {
+      const w = i === line.length - 1 ? MARGIN + INNER - x : Math.floor((free * s.width) / natural);
+      place('slicer', s.json, { x, y, width: w, height: SLICER_H });
+      x += w + GAP;
+    });
+    y += SLICER_H + 8;
+  }
+  if (slicers.length) y += GAP - 8;
 
   // components: section headings, rows of cards, then the 12-column grid
   let section: string | undefined;
@@ -605,9 +628,12 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     if (!row.length) return;
     let cx = MARGIN;
     let bottom = y;
+    // boxes side by side share one height (the tallest), so the row lines up
+    const rowH = Math.max(...row.map((r) => HEIGHT[r.c.type] ?? 300));
     for (const r of row) {
       const w = span(r.c.width);
-      const h = HEIGHT[r.c.type] ?? 300;
+      const h = rowH;
+      r.v.fit?.(w);
       const tf = toggleField(r.c);
       let top = y;
       let sName: string | undefined;
@@ -645,6 +671,7 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
       const h = Math.max(...line.map((k) => HEIGHT[k.c.type] ?? 112));
       for (const k of line) {
         const w = Math.floor((free * cardWeight(k.c)) / total);
+        k.v.fit?.(w);
         place(k.c.id, k.v.visual, { x: cx, y, width: w, height: h }, k.v.filters);
         cx += w + GAP;
       }

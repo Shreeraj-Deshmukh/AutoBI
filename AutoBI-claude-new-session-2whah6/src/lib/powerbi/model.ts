@@ -30,6 +30,8 @@ export interface PbiColumn {
   groupByColumn?: string;
   /** Field parameter: this column holds the NAMEOF() field references. */
   parameterFields?: boolean;
+  /** Number of distinct non-blank values in the data (layout hint, not written to TMDL). */
+  distinct?: number;
 }
 
 export interface PbiMeasure {
@@ -429,6 +431,8 @@ export function buildModel(input: ExportInput): PbiModel {
       return col;
     });
     const data = rows.map((r) => cols.map((c) => toPbiValue(r[c.source!], c.dataType)));
+    // non-blank distinct values (the report sizes one-row matrices from it)
+    cols.forEach((c, i) => (c.distinct = new Set(data.map((r) => r[i]).filter((v) => v != null)).size));
     // ordinal text (aging buckets, tiers, deciles) gets a hidden numeric sort key so axes follow the engine's order
     for (const [i, c] of [...cols.entries()]) {
       if (c.dataType !== 'string' || keyCols.has(`${p.datasetId}::${c.source}`)) continue;
