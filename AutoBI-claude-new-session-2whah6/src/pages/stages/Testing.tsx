@@ -27,7 +27,7 @@ export default function TestingStage({ p }: { p: Project }) {
       <StageLayout
         p={p}
         agent="testing"
-        main={<Empty icon={<ClipboardCheck className="h-5 w-5" />} title="No test cases yet" action={<Button variant="primary" loading={busy} onClick={() => runTestingAgent(p.id)}>Generate test cases</Button>}>The Testing Agent inspects every filter, chart and table of dashboard v{p.dashboard?.version} and writes Functional Testing cases and Data Validation scenarios.</Empty>}
+        main={busy ? null : <Empty icon={<ClipboardCheck className="h-5 w-5" />} title="No test cases yet" action={<Button variant="primary" onClick={() => runTestingAgent(p.id)}>Generate test cases</Button>}>The Testing Agent inspects every filter, chart and table of dashboard v{p.dashboard?.version} and writes Functional Testing cases and Data Validation scenarios.</Empty>}
         next="Generate tests, run the automated ones, then complete UAT."
       />
     );

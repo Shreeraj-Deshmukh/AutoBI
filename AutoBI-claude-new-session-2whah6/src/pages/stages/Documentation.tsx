@@ -23,7 +23,7 @@ export default function DocumentationStage({ p }: { p: Project }) {
   const outdated = D && D.basis !== docBasis(p);
 
   const main = !D ? (
-    <Empty icon={<FileText className="h-5 w-5" />} title="No documentation generated yet" action={<Button variant="primary" loading={busy} onClick={() => runDocumentationAgent(p.id)}>Generate documentation</Button>}>Documentation can be generated progressively at any stage. The final package requires UAT sign-off and reflects the latest approved artifacts and test results.</Empty>
+    busy ? null : <Empty icon={<FileText className="h-5 w-5" />} title="No documentation generated yet" action={<Button variant="primary" onClick={() => runDocumentationAgent(p.id)}>Generate documentation</Button>}>Documentation can be generated progressively at any stage. The final package requires UAT sign-off and reflects the latest approved artifacts and test results.</Empty>
   ) : (
     <>
       <div className="flex flex-wrap items-center gap-2">

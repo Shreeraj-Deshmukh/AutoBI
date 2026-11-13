@@ -31,7 +31,7 @@ export default function DesignStage({ p }: { p: Project }) {
   const u = p.understanding!;
 
   if (!d)
-    return <Empty icon={<PenTool className="h-5 w-5" />} title="No wireframe yet" action={<Button variant="primary" loading={busy} onClick={() => runDesignAgent(p.id)}>Generate wireframe</Button>}>The Dashboard Design Agent will propose a multi-page dashboard from the approved requirements and reporting foundation.</Empty>;
+    return <StageLayout p={p} agent="design" main={busy ? null : <Empty icon={<PenTool className="h-5 w-5" />} title="No wireframe yet" action={<Button variant="primary" onClick={() => runDesignAgent(p.id)}>Generate wireframe</Button>}>The Dashboard Design Agent will propose a multi-page dashboard from the approved requirements and reporting foundation.</Empty>} />;
 
   const spec = d.spec;
   const page = spec.pages.find((x) => x.id === pageId) ?? spec.pages[0];

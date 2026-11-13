@@ -108,6 +108,7 @@ export default function AgentPanel({ p, agent, next, children }: { p: Project; a
   const runs = p.runs.filter((r) => r.agentId === agent);
   const latest = runs[0];
   const running = latest?.status === 'running';
+  const done = runs.filter((r) => r.status !== 'running');
   return (
     <div className="card overflow-hidden">
       <div className="flex items-center gap-2.5 bg-navy-900 px-4 py-2.5 text-white" title={meta.role}>
@@ -123,12 +124,14 @@ export default function AgentPanel({ p, agent, next, children }: { p: Project; a
       <div className="space-y-2.5 px-4 py-3">
         {children}
         {next && <p className="text-xs text-brand-800"><span className="font-semibold">Next: </span>{next}</p>}
-        {latest && (
+        {running && <p className="flex items-center gap-1.5 text-xs text-slate-500"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-brand-500" />Working — live progress is shown at the top of the page.</p>}
+        {/* the run in progress is shown by the loader above the stage; the log holds finished runs */}
+        {done.length > 0 && (
           <details className="text-xs" open>
-            <summary className="cursor-pointer text-slate-500">Agent log{runs.length > 1 ? ` · ${runs.length} runs` : ''}</summary>
+            <summary className="cursor-pointer text-slate-500">Agent log{done.length > 1 ? ` · ${done.length} runs` : ''}</summary>
             <div className="mt-2 space-y-3">
-              <RunView r={latest} />
-              {runs.slice(1, 6).map((r) => (
+              <RunView r={done[0]} />
+              {done.slice(1, 6).map((r) => (
                 <div key={r.id} className="border-l-2 border-slate-200 pl-2"><RunView r={r} compact /></div>
               ))}
             </div>

@@ -25,7 +25,7 @@ export default function FoundationStage({ p }: { p: Project }) {
   const approved = p.stages.foundation.status === 'approved';
 
   const main = !f ? (
-    <Empty title="No reporting foundation yet" action={<Button variant="primary" loading={busy} onClick={() => runFoundationAgent(p.id)}>Run Reporting Foundation Agent</Button>}>The agent proposes a logical reporting model from the confirmed data understanding.</Empty>
+    busy ? null : <Empty title="No reporting foundation yet" action={<Button variant="primary" onClick={() => runFoundationAgent(p.id)}>Run Reporting Foundation Agent</Button>}>The agent proposes a logical reporting model from the confirmed data understanding.</Empty>
   ) : (
     <>
       <div className="flex flex-wrap items-center gap-2">

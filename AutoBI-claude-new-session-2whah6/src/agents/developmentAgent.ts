@@ -96,7 +96,21 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
   return out;
 }
 
-export function buildDashboard(spec: DashboardSpec, designVersion: number, u: DataUnderstanding, foundation: Foundation, engine: Engine, prevVersion = 0): DashboardBuild {
+/** Build-time corrections to a design: a stacked chart of a rate or average (whose segments can't be added up) is built as a bar chart. */
+function buildable(input: DashboardSpec, foundation: Foundation): DashboardSpec {
+  const spec = clone(input);
+  for (const c of spec.pages.flatMap((p) => p.components)) {
+    const kind = foundation.measures.find((m) => m.id === c.measureIds[0])?.kind;
+    if (c.type === 'stacked' && kind && !['count', 'countDistinct', 'sum'].includes(kind)) {
+      c.type = 'bar';
+      c.series = undefined;
+    }
+  }
+  return spec;
+}
+
+export function buildDashboard(design: DashboardSpec, designVersion: number, u: DataUnderstanding, foundation: Foundation, engine: Engine, prevVersion = 0): DashboardBuild {
+  const spec = buildable(design, foundation);
   const validations = validateComponents(spec, engine, foundation);
   const warnings: string[] = validations.filter((v) => !v.ok).map((v) => `${v.page} › ${v.title}: ${v.message}`);
   for (const r of u.relationships.filter((r) => r.unmatched > 0 && r.status !== 'rejected')) {

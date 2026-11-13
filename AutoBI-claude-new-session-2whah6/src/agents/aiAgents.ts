@@ -270,6 +270,9 @@ export async function aiDefineMeasure(text: string, u: DataUnderstanding, existi
 // ───────────────────────── Dashboard design ─────────────────────────
 interface CompJson { type?: string; title?: string; measures?: string[]; dimension?: string; series?: string; width?: number; topN?: number; threshold?: number; description?: string }
 
+/** Measure kinds whose values can be added up across the segments of a stacked chart. */
+const STACKABLE: MeasureDef['kind'][] = ['count', 'countDistinct', 'sum'];
+
 export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spec: RequirementSpec | null, fallback: DashboardSpec): Promise<DashboardSpec> {
   const u = { ...u0, profiles: visibleProfiles(u0.profiles, f) };
   const fields = u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => ({ column: c.name, label: fieldLabel(f, fref(p.datasetId, c.name)), dataset: p.label })));
@@ -278,7 +281,7 @@ export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spe
   const templateNote = templated.length ? `\nThese pages are already built from the ProcDNA FRM report template — do NOT repeat them or their content; design 1–2 additional pages only (e.g. the patient access funnel and barriers): ${templated.map((p) => `"${p.name}" (${p.components.map((c) => c.title).join(', ')})`).join('; ')}.` : '';
   const j = await chatJSON<{ pages?: { name?: string; description?: string; sections?: { name?: string; components?: CompJson[] }[] }[]; filters?: string[] }>(
     `You are the Dashboard Design Agent. Design a Power BI-style dashboard for the requirements using ONLY the measures and fields listed.${templateNote}
-Component types: kpi (one measure), funnel (2–6 count measures in stage order), bar, hbar (needs dimension; use topN 10 for long lists), donut (≤6 categories), line (time trend, 1–3 measures), table (dimension + measures; "threshold" keeps rows whose first measure is greater than it), stacked (dimension + series).
+Component types: kpi (one measure), funnel (2–6 count measures in stage order), bar, hbar (needs dimension; use topN 10 for long lists), donut (≤6 categories), line (time trend, 1–3 measures), table (dimension + measures; "threshold" keeps rows whose first measure is greater than it), stacked (dimension + series; only for count or sum measures — rates, ratios and averages cannot be stacked, use bar for them).
 Width is out of 12. Group components into named sections in reading order (headline first, then drivers, then action lists). Prefer one or two focused pages over many; at most 6 KPI cards per page and at most 6 filters.
 Return {"pages":[{"name","description","sections":[{"name","components":[{"type","title","measures":[measure names],"dimension":"column","series":"column","width","topN","threshold","description"}]}]}],"filters":["column", ...]}`,
     `Requirements: ${JSON.stringify({ objectives: spec?.objectives.map((x) => x.text), stories: spec?.stories?.map((x) => x.text), kpis: spec?.kpis.map((x) => x.text), filters: spec?.filters.map((x) => x.text), pages: spec?.pages.map((x) => x.text) })}\nMeasures: ${JSON.stringify(f.measures.map((m) => ({ name: m.name, logic: m.logic })))}\nFields: ${JSON.stringify(fields)}`,
@@ -298,14 +301,19 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
     const comps: DashComponent[] = [];
     for (const sec of pg.sections ?? []) {
       for (const c of sec.components ?? []) {
-        const type = String(c.type) as ComponentType;
+        let type = String(c.type) as ComponentType;
         const ms = (c.measures ?? []).map((n) => mByName(String(n))).filter((m): m is MeasureDef => !!m);
         if (!TYPES.includes(type) || !ms.length) continue;
         const ds = dsOf(ms[0]);
         const dim = fieldRef(c.dimension, ds);
         if (['bar', 'hbar', 'donut', 'table', 'stacked'].includes(type) && !dim) continue;
-        const series = type === 'stacked' ? fieldRef(c.series, ds) : undefined;
+        let series = type === 'stacked' ? fieldRef(c.series, ds) : undefined;
         if (type === 'stacked' && !series) continue;
+        // segments of a stacked chart are added up, so it only works for counts and sums; a rate becomes a plain bar chart
+        if (type === 'stacked' && !STACKABLE.includes(ms[0].kind)) {
+          type = 'bar';
+          series = undefined;
+        }
         const width = ([3, 4, 6, 8, 12].includes(Number(c.width)) ? Number(c.width) : type === 'kpi' ? 3 : type === 'table' || type === 'funnel' || type === 'line' ? 12 : 6) as DashComponent['width'];
         comps.push({ id: uid('cmp'), type, title: String(c.title ?? ms[0].name), description: String(c.description ?? ''), measureIds: type === 'kpi' || ['bar', 'hbar', 'donut', 'stacked', 'table'].includes(type) && type !== 'table' ? [ms[0].id] : ms.map((m) => m.id), dimension: dim, series, timeGrain: type === 'line' || type === 'area' ? fallback.timeGrain : undefined, comparison: type === 'kpi' ? true : undefined, width, topN: c.topN ? Number(c.topN) : undefined, threshold: c.threshold != null && !Number.isNaN(Number(c.threshold)) ? { op: 'gt', value: Number(c.threshold) } : undefined, section: sec.name ? String(sec.name) : undefined, tableColumns: type === 'table' ? [] : undefined });
         valid++;

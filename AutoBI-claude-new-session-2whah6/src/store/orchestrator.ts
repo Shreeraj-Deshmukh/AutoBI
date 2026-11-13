@@ -145,6 +145,38 @@ export function currentStage(p: Project): StageId {
   return ORDER.find((s) => !['approved', 'completed'].includes(p.stages[s].status)) ?? 'documentation';
 }
 
+// ───────────────────────────── pacing ─────────────────────────────
+/** Automated test runs set localStorage "celestra-fast" = "1" to skip the pacing below. */
+const fastMode = () => {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('celestra-fast') === '1';
+  } catch {
+    return false;
+  }
+};
+
+/** How long one agent step appears to take: varied around `base` ms so runs read as real work, not a fixed tick. */
+export function stepTime(base: number) {
+  if (fastMode()) return 25;
+  return Math.round(base * (0.65 + Math.random() * 0.9));
+}
+
+/** Show a quick run moving on to its next step (first step done, second running). */
+function nextStep(pid: string, runId: string) {
+  mutate(pid, (p) => {
+    const r = p.runs.find((x) => x.id === runId);
+    if (r && r.steps.length > 1) r.steps = r.steps.map((st, i) => ({ ...st, status: i === 0 ? 'done' : i === 1 ? 'running' : st.status }));
+  });
+}
+
+/** Let a quick reply take at least ~1.2–2.4 s from `startedAt` (a model call takes about that long; slower AI calls are not delayed). */
+async function settle(startedAt: number) {
+  if (fastMode()) return;
+  const target = 1200 + Math.random() * 1200;
+  const left = target - (Date.now() - startedAt);
+  if (left > 0) await sleep(left);
+}
+
 // ───────────────────────────── agent runner ─────────────────────────────
 interface StepDef {
   label: string;
@@ -178,16 +210,16 @@ async function runAgent<T>(pid: string, agent: AgentId, steps: StepDef[], inputs
       const r = p.runs.find((x) => x.id === run.id);
       if (r) fn(r);
     });
-  const delay = opts.delay ?? 320;
+  const base = opts.delay ?? 1100;
   try {
     for (let i = 0; i < steps.length - 1; i++) {
       updRun((r) => (r.steps[i].status = 'running'));
-      await sleep(delay);
+      await sleep(stepTime(base));
       updRun((r) => (r.steps[i].status = 'done'));
     }
     updRun((r) => (r.steps[steps.length - 1].status = 'running'));
     const result = await work();
-    await sleep(delay);
+    await sleep(stepTime(base));
     mutate(pid, (p) => {
       const r = p.runs.find((x) => x.id === run.id)!;
       r.steps.forEach((s) => s.status === 'running' && (s.status = 'done'));
@@ -282,7 +314,10 @@ export async function chat(pid: string, text: string) {
     pp.runs.unshift({ id: runId, agentId: 'requirement', startedAt: nowIso(), status: 'running', engine: engineLabel(), steps: [{ label: 'Interpreting your message', status: 'running' }, { label: 'Updating requirements', status: 'pending' }], inputs: ['User message'], outputs: [], warnings: [], errors: [] });
   });
   const cur = getProject(pid)!;
+  const t0 = Date.now();
   const res = await withAI(() => aiRespond(cur.requirements!, text, cur.info), () => respondToMessage(cur.requirements!, text, cur.info));
+  nextStep(pid, runId);
+  await settle(t0);
   mutate(pid, (pp) => {
     const changed = JSON.stringify(res.value.spec) !== JSON.stringify(pp.requirements);
     pp.requirements = res.value.spec;
@@ -771,6 +806,7 @@ export async function defineKpiFromText(pid: string, text: string) {
   if (!p0.understanding || !p0.foundation) return null;
   const runId = uid('run');
   mutate(pid, (p) => p.runs.unshift({ id: runId, agentId: 'foundation', startedAt: nowIso(), status: 'running', engine: engineLabel(), steps: [{ label: 'Interpreting KPI request', status: 'running' }, { label: 'Validating fields and values against the data', status: 'pending' }], inputs: ['KPI request'], outputs: [], warnings: [], errors: [] }));
+  const t0 = Date.now();
   const res = await withAI(
     () => aiDefineMeasure(text, p0.understanding!, p0.foundation!.measures),
     () => {
@@ -782,6 +818,10 @@ export async function defineKpiFromText(pid: string, text: string) {
     toast('error', e.message);
     return null;
   });
+  if (res) {
+    nextStep(pid, runId);
+    await settle(t0);
+  }
   mutate(pid, (p) => (p.runs = p.runs.filter((r) => r.id !== runId)));
   if (!res) return null;
   mutate(pid, (p) => {
@@ -932,7 +972,10 @@ export async function designCommand(pid: string, text: string, activePageId?: st
     pp.runs.unshift({ id: runId, agentId: 'design', startedAt: nowIso(), status: 'running', engine: engineLabel(), steps: [{ label: 'Interpreting change request', status: 'running' }, { label: 'Updating wireframe', status: 'pending' }], inputs: ['Design change request', `Wireframe v${pp.design!.version}`], outputs: [], warnings: [], errors: [] });
   });
   const ctx = { u: p.understanding, f: p.foundation, activePageId };
+  const t0 = Date.now();
   const res = await withAI(() => aiDesignEdit(p.design!.spec, text, ctx), () => applyDesignCommand(p.design!.spec, text, ctx));
+  nextStep(pid, runId);
+  await settle(t0);
   mutate(pid, (pp) => {
     pp.designChat.push({ id: uid('msg'), role: 'agent', at: nowIso(), text: res.value.reply });
     const r = pp.runs.find((x) => x.id === runId)!;
@@ -1026,7 +1069,7 @@ export async function runDevelopmentAgent(pid: string) {
       run.warnings.push(...build.warnings);
       if (failed.length === build.validations.length) run.errors.push('No component could be rendered — check the design and reporting foundation.');
     },
-    { delay: 260 },
+    { delay: 950 },
   );
 }
 
@@ -1113,7 +1156,7 @@ export async function executeTests(pid: string, ids?: string[]) {
       run.summary = `Executed ${results.length} automated test(s): ${passed} passed, ${failed} failed, ${results.length - passed - failed} need attention.`;
       if (failed) run.warnings.push(...results.filter((r) => r.status === 'Failed').map((r) => `${r.id}: ${r.actual}`));
     },
-    { delay: 220 },
+    { delay: 1000 },
   );
 }
 

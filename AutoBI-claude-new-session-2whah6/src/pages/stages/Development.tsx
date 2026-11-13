@@ -4,7 +4,6 @@ import { Hammer, ExternalLink, CheckCircle2, XCircle, RefreshCw, Code2, Download
 import type { Project } from '@/types';
 import type { PowerBiExport } from '@/lib/powerbi';
 import StageLayout from '@/components/StageLayout';
-import { RunView } from '@/components/AgentPanel';
 import { Button, Callout, Card, Empty } from '@/components/ui';
 import DashboardView from '@/dashboard/DashboardView';
 import AccessCard from '@/components/AccessCard';
@@ -18,7 +17,6 @@ export default function DevelopmentStage({ p }: { p: Project }) {
   const engine = useEngine(p);
   const busy = isRunning(p, 'development');
   const b = p.dashboard;
-  const run = p.runs.find((r) => r.agentId === 'development');
   const stale = b && p.design && b.designVersion !== p.design.version;
   const [pbi, setPbi] = useState<{ busy?: boolean; error?: string; done?: { name: string; summary: PowerBiExport['summary']; warnings: string[] } }>({});
   const exportPowerBi = async () => {
@@ -35,11 +33,6 @@ export default function DevelopmentStage({ p }: { p: Project }) {
 
   const main = (
     <>
-      {busy && run && (
-        <Card title={<span className="flex items-center gap-2"><Hammer className="h-4 w-4 text-brand-600" />Dashboard Development Agent is building your dashboard</span>}>
-          <RunView r={run} />
-        </Card>
-      )}
       {!b && !busy && (
         <Empty icon={<Hammer className="h-5 w-5" />} title="Dashboard not generated yet" action={<Button variant="primary" onClick={() => runDevelopmentAgent(p.id)}>Start development</Button>}>The approved design v{p.design?.version} will be compiled into a working dashboard connected to the ingested data.</Empty>
       )}
@@ -55,7 +48,6 @@ export default function DevelopmentStage({ p }: { p: Project }) {
               <Button size="sm" variant="primary" onClick={() => nav(`/p/${p.id}/testing`)}>Continue to Testing →</Button>
             </div>
           </div>
-          {b.warnings.length > 0 && <Callout tone="warning" title={`${b.warnings.length} build warning(s)`}>{b.warnings.join(' ')}</Callout>}
           {pbi.error && <Callout tone="error" title="Power BI export failed">{pbi.error}</Callout>}
           {pbi.done && (
             <Callout tone="success" title={`Power BI project downloaded: ${pbi.done.name}_PowerBI.zip`}>

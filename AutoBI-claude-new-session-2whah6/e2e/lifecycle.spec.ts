@@ -14,6 +14,11 @@ function retailFiles() {
   ];
 }
 
+// skip the agents' pacing (realistic step timing) so the suite runs quickly
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('celestra-fast', '1'));
+});
+
 async function waitIdle(page: Page) {
   // agents show a pulsing "Agent working" box in the sidebar while running
   await expect(page.getByText('Agent working')).toHaveCount(0, { timeout: 30_000 });

@@ -30,7 +30,7 @@ export default function RequirementsStage({ p }: { p: Project }) {
   const st = p.stages.requirements.status;
 
   const main = !r ? (
-    <Empty icon={<FileCheck2 className="h-5 w-5" />} title="No requirements yet">Describe the dashboard in the assistant on the right.</Empty>
+    busy ? null : <Empty icon={<FileCheck2 className="h-5 w-5" />} title="No requirements yet">Describe the dashboard in the assistant on the right.</Empty>
   ) : (
     <>
       <div className="flex flex-wrap items-center gap-2">

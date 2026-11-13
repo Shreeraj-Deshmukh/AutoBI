@@ -379,6 +379,8 @@ export function applyDesignCommand(input: DashboardSpec, command: string, ctx0: 
         if ((t === 'line' || t === 'area') && !h.c.timeGrain) h.c.timeGrain = spec.timeGrain;
         if (['bar', 'hbar', 'donut', 'stacked', 'table'].includes(t) && !h.c.dimension) return no(`"${h.c.title}" has no category dimension, so it can't become a ${CHART_LABELS[t]}.`);
         if (t === 'stacked' && !h.c.series) h.c.type = 'bar';
+        const mk = ctx.f.measures.find((x) => x.id === h.c.measureIds[0])?.kind;
+        if (h.c.type === 'stacked' && mk && !['count', 'countDistinct', 'sum'].includes(mk)) return no(`"${h.c.title}" shows a rate or average, which can't be stacked — its segments would not add up. A bar chart shows it correctly.`);
       }
       return { spec, changed: true, reply: `Changed ${scoped.map((h) => `"${h.c.title}"`).join(', ')} to ${CHART_LABELS[t]}.` };
     }

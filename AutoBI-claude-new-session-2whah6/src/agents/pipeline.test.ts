@@ -348,3 +348,26 @@ describe('requirement mapping follows the KPIs actually defined', () => {
     expect(f.gaps.some((g) => g.startsWith('Reimbursement issue rate'))).toBe(false);
   });
 });
+
+describe('stacked chart of a rate (as an AI design can propose)', () => {
+  const d = generateAccessData();
+  const data = { sp_patient_journey: d.journey, payer_plan_pbm: d.plans, hcps: d.hcps, frm_territories: d.territories };
+  const r = run(ACCESS_NARRATIVE, data);
+  const rate = r.f.measures.find((m) => m.kind === 'ratio')!;
+  const dims = r.u.profiles.flatMap((p) => p.columns.filter((c) => c.role === 'dimension').map((c) => `${p.datasetId}::${c.name}`));
+  const design = structuredClone(r.design);
+  design.pages[0].components.push({ id: 'stacked_rate', type: 'stacked', title: `${rate.name} by Territory`, description: '', measureIds: [rate.id], dimension: dims[0], series: dims[1], width: 12 });
+
+  it('is built as a bar chart with data instead of an empty visual and a build warning', () => {
+    const build = buildDashboard(design, 1, r.u, r.f, r.engine);
+    const c = build.spec.pages[0].components.find((x) => x.id === 'stacked_rate')!;
+    expect(c.type).toBe('bar');
+    expect(build.validations.find((v) => v.componentId === 'stacked_rate')?.ok).toBe(true);
+    expect(build.warnings.some((w) => w.includes(c.title))).toBe(false);
+  });
+
+  it('the design assistant declines to stack a rate', () => {
+    const res = applyDesignCommand(structuredClone(design), `change ${rate.name} by Territory to stacked`, { u: r.u, f: r.f });
+    expect(res.changed).toBe(false);
+  });
+});
