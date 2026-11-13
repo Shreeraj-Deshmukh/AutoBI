@@ -11,7 +11,7 @@ const cache = new Map<string, Engine>();
 
 export function engineFor(p: Project): Engine | null {
   if (!p.understanding || !p.foundation) return null;
-  const key = `${p.id}|${p.understanding.generatedAt}|${p.foundation.generatedAt}|${JSON.stringify(p.foundation.measures)}|${p.understanding.relationships.map((r) => r.status).join()}|${rowsVersion}|${p.datasets.map((d) => getRows(d.id).length).join()}`;
+  const key = `${p.id}|${p.understanding.generatedAt}|${p.foundation.generatedAt}|${JSON.stringify(p.foundation.measures)}|${p.understanding.relationships.map((r) => `${r.fromDataset}.${r.fromField}>${r.toDataset}.${r.toField}:${r.status}`).join()}|${rowsVersion}|${p.datasets.map((d) => getRows(d.id).length).join()}`;
   let e = cache.get(key);
   if (!e) {
     e = new Engine({ profiles: p.understanding.profiles, relationships: p.understanding.relationships, measures: p.foundation.measures, rowsOf: getRows });

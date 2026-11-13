@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { FileText, FileDown, RefreshCw, CheckCircle2, FileType2, Printer, Code, Rocket } from 'lucide-react';
 import type { Project } from '@/types';
 import StageLayout from '@/components/StageLayout';
-import AgentPanel from '@/components/AgentPanel';
 import { Button, Callout, Card, Badge, Empty, cx } from '@/components/ui';
 import { isRunning, publishRelease, runDocumentationAgent } from '@/store/orchestrator';
 import { exportDocx, exportHtml, exportMarkdown, exportPdf, mdToHtml } from '@/lib/exportDocs';
@@ -64,7 +63,7 @@ export default function DocumentationStage({ p }: { p: Project }) {
       </div>
     </>
   );
-  return <StageLayout main={main} side={<AgentPanel p={p} agent="documentation" next={D?.final ? 'Project completed. The final package reflects the approved design, generated dashboard and signed-off UAT.' : 'Complete UAT sign-off, then regenerate to produce the final documentation package.'} />} />;
+  return <StageLayout p={p} agent="documentation" main={main} next={D?.final ? 'Project completed. The final package reflects the approved design, generated dashboard and signed-off UAT.' : 'Complete UAT sign-off, then regenerate to produce the final documentation package.'} />;
 }
 
 function ReleaseCard({ p }: { p: Project }) {

@@ -4,7 +4,7 @@ import { Hammer, ExternalLink, CheckCircle2, XCircle, RefreshCw, Code2, Download
 import type { Project } from '@/types';
 import type { PowerBiExport } from '@/lib/powerbi';
 import StageLayout from '@/components/StageLayout';
-import AgentPanel, { RunView } from '@/components/AgentPanel';
+import { RunView } from '@/components/AgentPanel';
 import { Button, Callout, Card, Empty } from '@/components/ui';
 import DashboardView from '@/dashboard/DashboardView';
 import AccessCard from '@/components/AccessCard';
@@ -92,5 +92,5 @@ export default function DevelopmentStage({ p }: { p: Project }) {
       )}
     </>
   );
-  return <StageLayout main={main} side={<AgentPanel p={p} agent="development" next={b ? 'The generated dashboard is handed to the Testing & UAT Agent, which inspects every component to generate test cases.' : 'The agent compiles the approved design specification into a working dashboard.'} />} />;
+  return <StageLayout p={p} agent="development" main={main} next={b ? 'The generated dashboard is handed to the Testing & UAT Agent, which inspects every component to generate test cases.' : 'The agent compiles the approved design specification into a working dashboard.'} />;
 }

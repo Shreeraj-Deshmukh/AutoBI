@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Plus, Pencil, Trash2, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
 import type { MeasureDef, Project } from '@/types';
 import StageLayout from '@/components/StageLayout';
-import AgentPanel from '@/components/AgentPanel';
 import { Button, Callout, Card, Badge, Tabs, Modal, Field, Empty, cx } from '@/components/ui';
 import { approveFoundation, defineKpiFromText, deleteMeasure, isRunning, runFoundationAgent, updateFieldMap, updateMeasure } from '@/store/orchestrator';
 import { useEngine } from '@/store/engineCache';
@@ -102,7 +101,7 @@ export default function FoundationStage({ p }: { p: Project }) {
 
   return (
     <>
-      <StageLayout main={main} side={<AgentPanel p={p} agent="foundation" next={approved ? 'The approved foundation (tables, relationships and KPI logic) feeds the Dashboard Design Agent.' : 'Review the model, mappings and KPI logic. Approve to unlock design approval.'} />} />
+      <StageLayout p={p} agent="foundation" main={main} next={approved ? 'The approved foundation (tables, relationships and KPI logic) feeds the Dashboard Design Agent.' : 'Review the model, mappings and KPI logic. Approve to unlock design approval.'} />
       {editing && <MeasureEditor p={p} m={editing} onClose={() => setEditing(null)} />}
     </>
   );

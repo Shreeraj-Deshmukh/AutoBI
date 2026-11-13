@@ -38,7 +38,7 @@ export function measureForRequirement(f: Foundation, requirement: string): Measu
 export function reconcileMappings(u: DataUnderstanding, f: Foundation) {
   const label = (id: string) => u.profiles.find((p) => p.datasetId === id)?.label ?? id;
   for (const mp of u.mappings) {
-    if (mp.kind !== 'kpi' || mp.status !== 'missing') continue;
+    if (mp.kind !== 'kpi' || mp.status !== 'missing' || mp.userEdited) continue;
     const m = measureForRequirement(f, mp.requirement);
     if (!m) continue;
     const parts = m.kind === 'ratio' ? [f.measures.find((x) => x.id === m.numeratorId), f.measures.find((x) => x.id === m.denominatorId)].filter((x): x is MeasureDef => !!x) : [m];

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Play, PlayCircle, Plus, CheckCircle2, XCircle, ExternalLink, Paperclip, Trash2, ClipboardCheck, ShieldCheck, Search, RefreshCw, Ban, RotateCcw } from 'lucide-react';
 import type { Defect, Priority, Project, TestCase, TestStatus } from '@/types';
 import StageLayout from '@/components/StageLayout';
-import AgentPanel from '@/components/AgentPanel';
 import { Button, Callout, Card, Badge, Tabs, Modal, Field, Empty, Stat, TestBadge, cx } from '@/components/ui';
 import { addComment, addTestCase, deleteTestCase, executeTests, isRunning, runTestingAgent, signOffUat, uatGateIssues, updateDefect, updateTest } from '@/store/orchestrator';
 import { summarize } from '@/agents/documentationAgent';
@@ -26,8 +25,10 @@ export default function TestingStage({ p }: { p: Project }) {
   if (!T)
     return (
       <StageLayout
+        p={p}
+        agent="testing"
         main={<Empty icon={<ClipboardCheck className="h-5 w-5" />} title="No test cases yet" action={<Button variant="primary" loading={busy} onClick={() => runTestingAgent(p.id)}>Generate test cases</Button>}>The Testing Agent inspects every filter, chart and table of dashboard v{p.dashboard?.version} and writes Functional Testing cases and Data Validation scenarios.</Empty>}
-        side={<AgentPanel p={p} agent="testing" next="Generate tests, run the automated ones, then complete UAT." />}
+        next="Generate tests, run the automated ones, then complete UAT."
       />
     );
 
@@ -65,7 +66,7 @@ export default function TestingStage({ p }: { p: Project }) {
 
   return (
     <>
-      <div className="space-y-5">{main}</div>
+      <StageLayout p={p} agent="testing" main={main} next={T.signoff.status === 'approved' ? 'UAT is signed off. Generate the final documentation package.' : 'Run the automated tests, fix failures, then complete UAT.'} />
       {testOpen && <TestDetail p={p} c={testOpen} onClose={() => setOpen(null)} />}
       {adding && <NewTest p={p} suite={adding} onClose={() => setAdding(null)} />}
     </>
