@@ -9,7 +9,7 @@ import { cx } from './ui';
  * (controlled by `open` / `onToggle`) and a one-line preview shows while collapsed.
  * Items whose id is in `highlight` were just added: they flash and are scrolled into view.
  */
-export default function EditableList({ title, items, onChange, placeholder, icon, collapsible, open = true, onToggle, highlight, readOnly, note }: { title: string; items: ReqItem[]; onChange: (items: ReqItem[]) => void; placeholder?: string; icon?: React.ReactNode; collapsible?: boolean; open?: boolean; onToggle?: () => void; highlight?: Set<string>; readOnly?: boolean; note?: React.ReactNode }) {
+export default function EditableList({ title, items, onChange, placeholder, icon, collapsible, open = true, onToggle, highlight }: { title: string; items: ReqItem[]; onChange: (items: ReqItem[]) => void; placeholder?: string; icon?: React.ReactNode; collapsible?: boolean; open?: boolean; onToggle?: () => void; highlight?: Set<string> }) {
   const [adding, setAdding] = useState('');
   const [edit, setEdit] = useState<{ id: string; text: string } | null>(null);
   const add = () => {
@@ -65,25 +65,24 @@ export default function EditableList({ title, items, onChange, placeholder, icon
                 ) : (
                   <span className="flex-1 text-sm text-slate-700">{it.text}</span>
                 )}
-                {!readOnly && <span className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
+                <span className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
                   <button className="rounded p-0.5 text-slate-400 hover:text-slate-700" onClick={() => setEdit({ id: it.id, text: it.text })} aria-label={`Edit ${it.text}`}>
                     <Pencil className="h-3 w-3" />
                   </button>
                   <button className="rounded p-0.5 text-slate-400 hover:text-red-600" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Remove ${it.text}`}>
                     <X className="h-3.5 w-3.5" />
                   </button>
-                </span>}
+                </span>
               </li>
             ))}
             {!items.length && <li className="px-1.5 py-1 text-xs text-slate-400">None identified.</li>}
           </ul>
-          {note && <div className="mt-2 px-1.5 text-xs text-slate-500">{note}</div>}
-          {!readOnly && <div className="mt-2 flex gap-1.5">
+          <div className="mt-2 flex gap-1.5">
             <input className="input py-1 text-xs" value={adding} placeholder={placeholder ?? 'Add item…'} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} aria-label={`Add to ${title}`} />
             <button onClick={add} className="rounded-md border border-slate-300 px-2 text-slate-500 hover:bg-slate-50" aria-label={`Add ${title}`}>
               <Plus className="h-3.5 w-3.5" />
             </button>
-          </div>}
+          </div>
         </div>
       )}
     </div>

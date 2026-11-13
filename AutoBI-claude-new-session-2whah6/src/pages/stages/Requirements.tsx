@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Target, Gauge, Layers3, Filter, LayoutGrid, FileCheck2, CheckCircle2, RefreshCw } from 'lucide-react';
-import type { Project, ReqItem, RequirementSection } from '@/types';
+import type { Project, RequirementSection } from '@/types';
 import StageLayout from '@/components/StageLayout';
 import Chat from '@/components/Chat';
 import EditableList from '@/components/EditableList';
@@ -28,15 +28,6 @@ export default function RequirementsStage({ p }: { p: Project }) {
   // one section open at a time keeps the page readable
   const [openKey, setOpenKey] = useState<RequirementSection | null>('objectives');
   const st = p.stages.requirements.status;
-  // Once a dashboard is designed, its pages and filters come from the data and the Design Studio
-  // (including assistant changes), so these two sections show the design as it actually is.
-  const ds = p.design?.spec;
-  const designed: Partial<Record<RequirementSection, ReqItem[]>> = ds
-    ? {
-        pages: ds.pages.map((pg) => ({ id: pg.id, text: pg.name, source: 'extracted' as const })),
-        filters: ds.filters.map((x) => ({ id: x.id, text: x.label, source: 'extracted' as const })),
-      }
-    : {};
   // items are compared by section + text (an AI reply may rebuild the spec with new ids)
   const keyOf = (s: RequirementSection, text: string) => `${s}${text.trim().toLowerCase()}`;
   const keys = useMemo(() => (r ? SECTIONS.flatMap((s) => (r[s.key] ?? []).map((it) => keyOf(s.key, it.text))) : []), [r]);
@@ -77,17 +68,10 @@ export default function RequirementsStage({ p }: { p: Project }) {
             onToggle={() => setOpenKey(openKey === s.key ? null : s.key)}
             title={s.title}
             icon={s.icon}
-            items={designed[s.key] ?? r[s.key] ?? []}
+            items={r[s.key] ?? []}
             placeholder={s.ph}
             onChange={(items) => editRequirementItems(p.id, s.key, items)}
             highlight={highlight}
-            readOnly={!!designed[s.key]}
-            note={designed[s.key] && (
-              <>
-                As designed in the dashboard.{' '}
-                <button className="font-medium text-brand-700 hover:underline" onClick={() => nav(`/p/${p.id}/design`)}>Change in Design Studio</button>
-              </>
-            )}
           />
         ))}
       </div>
