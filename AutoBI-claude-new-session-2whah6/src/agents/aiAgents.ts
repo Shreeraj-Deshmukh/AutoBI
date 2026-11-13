@@ -130,6 +130,7 @@ const DESIGN_COMMANDS = [
   'Move <visual> to <page>',
   'Remove the <field> filter',
   'Add a <field> filter',
+  'Add a time period filter (the reporting period with custom dates)',
   'Replace <visual> with a <bar|line|area|donut|table|stacked> chart',
   'Rename <visual> to <new title>',
   'Add a weekly comparison | Add a monthly comparison',
@@ -143,6 +144,12 @@ const DESIGN_COMMANDS = [
 
 /** Translate a free-form design request into canonical edit commands, then apply them deterministically. */
 export async function aiDesignEdit(spec: DashboardSpec, request: string, ctx: { u: DataUnderstanding; f: Foundation; activePageId?: string }) {
+  // plain filter requests ("Add a payer filter", "Add a time period filter", "Remove the market filter") are applied
+  // directly, so they behave exactly the same with or without a model
+  if (/^\s*(?:please\s+)?(?:add|remove|delete|drop)\s+(?:an?\s+|the\s+)?[\w\s,&/-]+?\s+(?:filters?|slicers?)\s*[.!]?\s*$/i.test(request)) {
+    const direct = applyDesignCommand(spec, request, ctx);
+    if (direct.changed) return direct;
+  }
   const visuals = spec.pages.map((p) => `${p.name}: ${p.components.map((c) => `"${c.title}" (${c.type})`).join(', ')}`);
   const fields = ctx.u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => c.name));
   const j = await chatJSON<{ commands?: unknown }>(
@@ -324,7 +331,10 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
   }
   if (valid < (templated.length ? 2 : 4)) throw new Error(`AI design had only ${valid} component(s) that match the model`);
   pages.unshift(...templated);
-  const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }, ...(templated.length ? fallback.filters.filter((x) => x.type === 'multi') : [])];
+  // the ProcDNA FRM report has a fixed filter panel (including the filters held back for the demo storyline,
+  // FEATURES.frmHeldBackFilters): keep the template's filters exactly, the model adds none
+  if (templated.length) return { ...fallback, pages, filters: fallback.filters };
+  const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }];
   for (const name of (j.filters ?? []).slice(0, 6)) {
     const r = fieldRef(String(name));
     if (r && filters.length < (templated.length ? 9 : 7) && !filters.some((x) => x.field === r)) filters.push({ id: uid('flt'), label: fieldLabel(f, r), type: 'multi', field: r });
