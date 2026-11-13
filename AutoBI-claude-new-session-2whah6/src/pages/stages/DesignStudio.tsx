@@ -160,7 +160,7 @@ export default function DesignStage({ p }: { p: Project }) {
 
   return (
     <>
-      <StageLayout main={main} side={side} />
+      <StageLayout p={p} agent="design" main={main} side={side} />
       {adding && <AddComponent p={p} onClose={() => setAdding(false)} onAdd={(c) => { const s: DashboardSpec = JSON.parse(JSON.stringify(spec)); s.pages.find((x) => x.id === page.id)!.components.push(c); change(s, `Added ${CHART_LABELS[c.type]} "${c.title}" to ${page.name}`); setSel(c.id); setAdding(false); }} dims={dims} />}
       <Modal open={versions} onClose={() => setVersions(false)} title="Design version history">
         <ul className="space-y-2">

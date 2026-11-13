@@ -27,18 +27,7 @@ export function RunView({ r, compact }: { r: AgentRun; compact?: boolean }) {
         <span className="text-[0.6875rem] text-slate-400">{fmtDateTime(r.startedAt)}</span>
       </div>
       {r.summary && <div className="text-xs text-slate-700">{r.summary}</div>}
-      {!compact && (
-        <ul className="space-y-1">
-          {r.steps.map((s, i) => (
-            <li key={i} className={cx('flex items-start gap-2 text-xs', s.status === 'pending' ? 'text-slate-400' : 'text-slate-600')}>
-              <span className="mt-0.5">
-                <StepIcon s={s.status} />
-              </span>
-              {s.label}
-            </li>
-          ))}
-        </ul>
-      )}
+      {!compact && <StepList steps={r.steps} />}
       {r.warnings.length > 0 && (
         <details className="rounded-md bg-amber-50 px-2 py-1 text-[0.6875rem] text-amber-800">
           <summary className="cursor-pointer font-medium">{r.warnings.length} warning(s)</summary>
@@ -68,6 +57,52 @@ export function RunView({ r, compact }: { r: AgentRun; compact?: boolean }) {
   );
 }
 
+/** The run's steps with tick / spinner icons (shared by the agent log and the loader). */
+export function StepList({ steps, revealed }: { steps: AgentStep[]; revealed?: boolean }) {
+  // revealed: only the steps the agent has reached, so they appear one by one
+  const shown = revealed ? steps.filter((s) => s.status !== 'pending') : steps;
+  return (
+    <ul className="space-y-1">
+      {shown.map((s, i) => (
+        <li key={i} className={cx('flex items-start gap-2 text-xs', s.status === 'pending' ? 'text-slate-400' : s.status === 'running' ? 'font-medium text-slate-800' : 'text-slate-600')}>
+          <span className="mt-0.5">
+            <StepIcon s={s.status} />
+          </span>
+          {s.label}
+          {s.status === 'running' && '…'}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Loader shown above a stage while its agent is working; styled like the agent log card. */
+export function AgentProgress({ p, agent }: { p: Project; agent: AgentId }) {
+  const run = p.runs.find((r) => r.agentId === agent);
+  if (run?.status !== 'running') return null;
+  const meta = agentMeta(agent);
+  const done = run.steps.filter((s) => s.status === 'done').length;
+  return (
+    <div className="card overflow-hidden" role="status" aria-live="polite">
+      <div className="flex items-center gap-2.5 bg-navy-900 px-4 py-2.5 text-white">
+        <Bot className="h-4 w-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[0.8125rem] font-semibold">{meta.name}</div>
+          <div className="truncate text-[0.6875rem] text-blue-100/80">{run.engine}</div>
+        </div>
+        <RunStatus r={run} />
+      </div>
+      <div className="space-y-2 px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[0.6875rem] font-medium text-slate-500">Step {Math.min(done + 1, run.steps.length)} of {run.steps.length}</span>
+          <span className="text-[0.6875rem] text-slate-400">{fmtDateTime(run.startedAt)}</span>
+        </div>
+        <StepList steps={run.steps} revealed />
+      </div>
+    </div>
+  );
+}
+
 export default function AgentPanel({ p, agent, next, children }: { p: Project; agent: AgentId; next?: string; children?: ReactNode }) {
   const meta = agentMeta(agent);
   const runs = p.runs.filter((r) => r.agentId === agent);
@@ -86,12 +121,11 @@ export default function AgentPanel({ p, agent, next, children }: { p: Project; a
         {latest && !running && <RunStatus r={latest} />}
       </div>
       <div className="space-y-2.5 px-4 py-3">
-        {latest?.summary && <p className="text-xs text-slate-700">{latest.summary}</p>}
         {children}
         {next && <p className="text-xs text-brand-800"><span className="font-semibold">Next: </span>{next}</p>}
         {latest && (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-slate-500">Run details{runs.length > 1 ? ` · ${runs.length} runs` : ''}</summary>
+          <details className="text-xs" open>
+            <summary className="cursor-pointer text-slate-500">Agent log{runs.length > 1 ? ` · ${runs.length} runs` : ''}</summary>
             <div className="mt-2 space-y-3">
               <RunView r={latest} />
               {runs.slice(1, 6).map((r) => (

@@ -168,6 +168,15 @@ export function detectRelationships(profiles: DatasetProfile[], rowsOf: (id: str
   return rels;
 }
 
+/** How well `fromField` values find a match in `toField` (used when the user defines or edits a link). */
+export function linkStats(fromRows: Row[], fromField: string, toRows: Row[], toField: string): { matchRate: number; unmatched: number } {
+  const keys = new Set(toRows.map((r) => String(r[toField])));
+  const vals = fromRows.map((r) => r[fromField]).filter((v) => v != null && v !== '');
+  if (!vals.length) return { matchRate: 0, unmatched: 0 };
+  const hit = vals.filter((v) => keys.has(String(v))).length;
+  return { matchRate: hit / vals.length, unmatched: vals.length - hit };
+}
+
 /** Infer what each dataset represents (master vs activity) once relationships are known. */
 export function classifyDatasets(profiles: DatasetProfile[], rels: Relationship[]) {
   for (const p of profiles) {

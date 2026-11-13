@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 
 /** Builds a small, deterministic retail dataset (a different domain from the HCP demo). */
@@ -115,20 +116,20 @@ test('full lifecycle on a new project with uploaded data', async ({ page }) => {
   await expect(page.getByText('100%', { exact: true })).toBeVisible();
 });
 
-test('demo data kit can be attached to a new project in one click', async ({ page }) => {
+test('a sample project works with its files uploaded manually', async ({ page }) => {
   await page.goto('/#/new');
-  await page.getByRole('radio', { name: /Retail sales/ }).click();
+  await page.getByLabel('Sample project').selectOption('access');
   await page.getByRole('button', { name: /Create project/ }).click();
   await expect(page.getByText('KPIs', { exact: true })).toBeVisible({ timeout: 20_000 });
   await waitIdle(page);
   await page.getByRole('button', { name: 'Generate Requirements Specification' }).click();
   await page.getByRole('button', { name: 'Approve Specification' }).click();
   await page.getByRole('button', { name: /Continue to Data/ }).click();
-  await page.getByRole('button', { name: 'Retail Sales', exact: true }).click();
+  await page.getByTestId('file-input').setInputFiles(['sp_patient_journey.csv', 'payer_plan_pbm.csv', 'hcp_frm_alignment.xlsx', 'frm_cases.csv'].map((f) => path.resolve('public/sample-data/access', f)));
   await waitIdle(page);
-  await expect(page.getByText('Transaction Activity').first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('Store Master').first()).toBeVisible();
-  await expect(page.getByText('Product Master').first()).toBeVisible();
-  await page.getByRole('tab', { name: /Relationships/ }).click();
-  await expect(page.getByText(/Product_ID that does not exist/).first()).toBeVisible();
+  await expect(page.getByText('Patient Activity').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Plan Master').first()).toBeVisible();
+  await expect(page.getByText('Territory Master').first()).toBeVisible();
+  await page.getByRole('tab', { name: /Links & quality/ }).click();
+  await expect(page.getByText(/Plan_ID that does not exist/).first()).toBeVisible();
 });

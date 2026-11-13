@@ -185,6 +185,8 @@ export interface ColumnProfile {
   invalid: number; // values that do not match the inferred type
   topValues: { value: string; count: number }[];
   businessDefinition: string;
+  /** The user changed the role or meaning; kept when the agent re-runs. */
+  edited?: boolean;
 }
 
 export type DatasetKind = 'master' | 'activity' | 'reference' | 'unknown';
@@ -202,6 +204,9 @@ export interface DatasetProfile {
   confidence: number;
   dateField?: string;
   columns: ColumnProfile[];
+  /** The user renamed the dataset or changed its kind; kept when the agent re-runs. */
+  labelEdited?: boolean;
+  kindEdited?: boolean;
 }
 
 export interface Relationship {
@@ -214,6 +219,8 @@ export interface Relationship {
   unmatched: number;
   confidence: number;
   status: 'suggested' | 'confirmed' | 'rejected';
+  /** Added or edited by the user (not detected by the agent). */
+  manual?: boolean;
 }
 
 export interface DQIssue {
@@ -239,6 +246,8 @@ export interface ReqMapping {
   fields: string[];
   status: MappingStatus;
   note: string;
+  /** Set by the user; kept when requirements are re-mapped. */
+  userEdited?: boolean;
 }
 
 export interface DataUnderstanding {

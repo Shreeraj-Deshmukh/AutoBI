@@ -3,6 +3,9 @@ import type {
   AgentRun,
   ChatMessage,
   Clarification,
+  ColumnRole,
+  DataUnderstanding,
+  DatasetKind,
   DashboardSpec,
   DatasetMeta,
   Defect,
@@ -13,6 +16,8 @@ import type {
   Project,
   ProjectInfo,
   ReqItem,
+  ReqMapping,
+  Relationship,
   Row,
   RequirementSection,
   ReleaseState,
@@ -29,6 +34,7 @@ import { aiDefineMeasure, aiDescribeData, aiDesignEdit, aiExecutiveSummary, aiEx
 import { buildMeasureFromText } from '@/agents/kpiBuilder';
 import { applyClarification, extractRequirements, respondToMessage } from '@/agents/requirementAgent';
 import { mapRequirements, runDataIntelligence } from '@/agents/dataAgent';
+import { detectIssues, linkStats } from '@/lib/profile';
 import { fillRequirementGaps, measureLogic, reconcileMappings, runFoundation } from '@/agents/foundationAgent';
 import { applyDesignCommand, designStats, generateDesign } from '@/agents/designAgent';
 import { buildDashboard } from '@/agents/developmentAgent';
@@ -350,8 +356,7 @@ export function approveRequirements(pid: string) {
     log(p, 'User', 'gate', `Approved Requirements Specification v${p.requirementsVersion}`, 'requirements');
     if (p.stages.data.status === 'not_started') setStage(p, 'data', 'in_progress');
     // refresh mapping if data already understood
-    if (p.understanding) p.understanding.mappings = mapRequirements(p.requirements, p.understanding.profiles, p.understanding.relationships);
-    if (p.understanding && p.foundation) reconcileMappings(p.understanding, p.foundation);
+    remap(p);
   });
   toast('success', 'Requirements approved. Next: upload datasets for the Data Intelligence Agent.');
 }
@@ -517,17 +522,10 @@ export async function runDataIntelligenceAgent(pid: string, opts: { refresh?: bo
     (p, u, run) => {
       stamp(run, dmeta);
       const prev = p.understanding;
-      // preserve user decisions on relationships / resolved issues
-      if (prev) {
-        for (const r of u.relationships) {
-          const old = prev.relationships.find((x) => x.fromDataset === r.fromDataset && x.fromField === r.fromField && x.toDataset === r.toDataset);
-          if (old) {
-            r.id = old.id;
-            r.status = old.status;
-          }
-        }
-      }
+      // preserve user decisions: relationships, dataset / column edits and edited mappings
+      if (prev) keepUserEdits(prev, u);
       p.understanding = u;
+      if (prev && p.requirements) remap(p);
       for (const d of p.datasets) {
         const prof = u.profiles.find((x) => x.datasetId === d.id);
         d.status = prof ? 'profiled' : 'error';
@@ -555,10 +553,149 @@ export function setRelationshipStatus(pid: string, relId: string, status: 'confi
     const r = p.understanding?.relationships.find((x) => x.id === relId);
     if (!r) return;
     r.status = status;
-    if (p.requirements) p.understanding!.mappings = mapRequirements(p.requirements, p.understanding!.profiles, p.understanding!.relationships);
-    if (p.foundation) reconcileMappings(p.understanding!, p.foundation);
+    remap(p);
     log(p, 'User', 'user', `${humanize(status)} relationship ${r.fromField} → ${r.toField}`, 'data');
     if (p.stages.data.status === 'completed') flagDownstream(p, 'data', 'relationships changed');
+  });
+}
+
+/** Keep what the user decided on a previous understanding when the agent re-runs. */
+function keepUserEdits(prev: DataUnderstanding, u: DataUnderstanding) {
+  for (const r of u.relationships) {
+    const old = prev.relationships.find((x) => !x.manual && x.fromDataset === r.fromDataset && x.fromField === r.fromField && x.toDataset === r.toDataset);
+    if (old) {
+      r.id = old.id;
+      r.status = old.status;
+    }
+  }
+  const ids = new Set(u.profiles.map((x) => x.datasetId));
+  for (const r of prev.relationships.filter((x) => x.manual && ids.has(x.fromDataset) && ids.has(x.toDataset))) {
+    u.relationships = u.relationships.filter((x) => !(x.fromDataset === r.fromDataset && x.fromField === r.fromField && x.toDataset === r.toDataset));
+    u.relationships.push(r);
+  }
+  for (const pf of u.profiles) {
+    const old = prev.profiles.find((x) => x.datasetId === pf.datasetId);
+    if (!old) continue;
+    if (old.labelEdited) Object.assign(pf, { label: old.label, labelEdited: true });
+    if (old.kindEdited) Object.assign(pf, { kind: old.kind, kindEdited: true });
+    for (const c of pf.columns) {
+      const oc = old.columns.find((x) => x.name === c.name && x.edited);
+      if (oc) Object.assign(c, { role: oc.role, businessDefinition: oc.businessDefinition, edited: true });
+    }
+  }
+  for (const i of u.issues) if (prev.issues.some((x) => x.resolved && x.type === i.type && x.datasetId === i.datasetId && x.column === i.column)) i.resolved = true;
+  u.mappings = mergeMappings(u.mappings, prev.mappings);
+}
+
+/** Fresh agent mappings, with the user's edited ones kept in their place. */
+export function mergeMappings(fresh: ReqMapping[], prev: ReqMapping[]): ReqMapping[] {
+  return fresh.map((m) => prev.find((o) => o.userEdited && o.kind === m.kind && o.requirement.toLowerCase() === m.requirement.toLowerCase()) ?? m);
+}
+
+/** Re-map requirements to data after anything they depend on changed (user-edited mappings are kept). */
+function remap(p: Project) {
+  const u = p.understanding;
+  if (!u) return;
+  if (p.requirements) u.mappings = mergeMappings(mapRequirements(p.requirements, u.profiles, u.relationships), u.mappings);
+  if (p.foundation) reconcileMappings(u, p.foundation);
+}
+
+/** Data understanding was edited by the user: re-derive what depends on it and flag later stages. */
+function touchUnderstanding(p: Project, note: string) {
+  const u = p.understanding!;
+  const label = (id: string) => u.profiles.find((x) => x.datasetId === id)?.label ?? id;
+  const resolved = u.issues.filter((i) => i.resolved);
+  u.issues = detectIssues(u.profiles, u.relationships, label);
+  for (const i of u.issues) if (resolved.some((x) => x.type === i.type && x.datasetId === i.datasetId && x.column === i.column)) i.resolved = true;
+  remap(p);
+  log(p, 'User', 'user', note, 'data');
+  if (p.stages.data.status === 'completed') {
+    setStage(p, 'data', 'pending_approval');
+    flagDownstream(p, 'data', note);
+  }
+}
+
+export function updateDatasetProfile(pid: string, datasetId: string, patch: { label?: string; kind?: DatasetKind }) {
+  mutate(pid, (p) => {
+    const pf = p.understanding?.profiles.find((x) => x.datasetId === datasetId);
+    if (!pf) return;
+    if (patch.label !== undefined && patch.label.trim() && patch.label.trim() !== pf.label) {
+      const ds = p.datasets.find((d) => d.id === datasetId);
+      Object.assign(pf, { label: patch.label.trim(), labelEdited: true });
+      if (ds) ds.name = pf.label;
+    }
+    if (patch.kind && patch.kind !== pf.kind) Object.assign(pf, { kind: patch.kind, kindEdited: true });
+    touchUnderstanding(p, `Edited dataset "${pf.label}"`);
+  });
+}
+
+export function updateColumn(pid: string, datasetId: string, column: string, patch: { role?: ColumnRole; businessDefinition?: string }) {
+  mutate(pid, (p) => {
+    const pf = p.understanding?.profiles.find((x) => x.datasetId === datasetId);
+    const c = pf?.columns.find((x) => x.name === column);
+    if (!pf || !c) return;
+    const roleChanged = patch.role !== undefined && patch.role !== c.role;
+    const defChanged = patch.businessDefinition !== undefined && patch.businessDefinition !== c.businessDefinition;
+    if (!roleChanged && !defChanged) return;
+    Object.assign(c, patch, { edited: true });
+    if (roleChanged) touchUnderstanding(p, `Changed ${pf.label}.${column} to ${humanize(c.role)}`);
+    else log(p, 'User', 'user', `Edited the meaning of ${pf.label}.${column}`, 'data');
+  });
+}
+
+export interface LinkInput {
+  fromDataset: string;
+  fromField: string;
+  toDataset: string;
+  toField: string;
+}
+
+/** Add a link between datasets, or change an existing one (relId). User links are confirmed. */
+export function saveRelationship(pid: string, link: LinkInput, relId?: string) {
+  mutate(pid, (p) => {
+    const u = p.understanding;
+    if (!u) return;
+    const stats = linkStats(getRows(link.fromDataset), link.fromField, getRows(link.toDataset), link.toField);
+    const r: Relationship = { id: relId ?? uid('rel'), ...link, ...stats, confidence: 1, status: 'confirmed', manual: true };
+    if (relId) u.relationships = u.relationships.map((x) => (x.id === relId ? r : x));
+    else u.relationships.push(r);
+    const fk = u.profiles.find((x) => x.datasetId === link.fromDataset)?.columns.find((c) => c.name === link.fromField);
+    if (fk && fk.role !== 'identifier' && !fk.edited) fk.role = 'foreign_key';
+    const label = (id: string) => u.profiles.find((x) => x.datasetId === id)?.label ?? id;
+    touchUnderstanding(p, `${relId ? 'Edited' : 'Added'} link ${label(link.fromDataset)}.${link.fromField} → ${label(link.toDataset)}.${link.toField}`);
+  });
+}
+
+export function deleteRelationship(pid: string, relId: string) {
+  mutate(pid, (p) => {
+    const u = p.understanding;
+    const r = u?.relationships.find((x) => x.id === relId);
+    if (!u || !r) return;
+    u.relationships = u.relationships.filter((x) => x.id !== relId);
+    touchUnderstanding(p, `Removed link on ${r.fromField}`);
+  });
+}
+
+export function updateMapping(pid: string, mappingId: string, patch: Pick<ReqMapping, 'sources' | 'fields' | 'status' | 'note'>) {
+  mutate(pid, (p) => {
+    const m = p.understanding?.mappings.find((x) => x.id === mappingId);
+    if (!m) return;
+    Object.assign(m, patch, { userEdited: true });
+    if (p.foundation) reconcileMappings(p.understanding!, p.foundation);
+    log(p, 'User', 'user', `Re-mapped requirement "${m.requirement}"`, 'data');
+    if (p.stages.data.status === 'completed') flagDownstream(p, 'data', `requirement "${m.requirement}" was re-mapped`);
+  });
+}
+
+/** Drop the user's mapping and take the agent's suggestion again. */
+export function resetMapping(pid: string, mappingId: string) {
+  mutate(pid, (p) => {
+    const u = p.understanding;
+    const m = u?.mappings.find((x) => x.id === mappingId);
+    if (!u || !m) return;
+    m.userEdited = false;
+    remap(p);
+    log(p, 'User', 'user', `Reset mapping of "${m.requirement}" to the agent suggestion`, 'data');
   });
 }
 
@@ -579,8 +716,7 @@ export function confirmUnderstanding(pid: string) {
     return false;
   }
   mutate(pid, (pp) => {
-    if (pp.requirements) pp.understanding!.mappings = mapRequirements(pp.requirements, pp.understanding!.profiles, pp.understanding!.relationships);
-    if (pp.foundation) reconcileMappings(pp.understanding!, pp.foundation);
+    remap(pp);
     setStage(pp, 'data', 'completed', true);
     milestone(pp, 'Data Understanding Complete');
     log(pp, 'User', 'gate', 'Reviewed and confirmed the Data Understanding Report', 'data');

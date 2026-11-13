@@ -5,7 +5,7 @@ import { Button, Card, Progress, StageBadge } from '@/components/ui';
 import { currentStage, deleteProject, progress } from '@/store/orchestrator';
 import { ensureDemo } from '@/store/seed';
 import { STAGES } from '@/agents/registry';
-import { DEMO_KITS, downloadKit } from '@/lib/demoKits';
+import { SHOWN_KITS as DEMO_KITS, downloadKit } from '@/lib/demoKits';
 import PageHeader from '@/components/PageHeader';
 import { fmtDateTime } from '@/lib/util';
 
