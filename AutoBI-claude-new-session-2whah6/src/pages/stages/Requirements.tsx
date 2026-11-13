@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Target, Gauge, Layers3, Filter, LayoutGrid, FileCheck2, CheckCircle2, RefreshCw } from 'lucide-react';
+import { BookOpen, Target, Gauge, Filter, LayoutGrid, FileCheck2, CheckCircle2, RefreshCw } from 'lucide-react';
 import type { Project, ReqItem, RequirementSection } from '@/types';
 import StageLayout from '@/components/StageLayout';
 import Chat from '@/components/Chat';
@@ -12,12 +12,11 @@ import { analyseRequirements, answerClarification, approveRequirements, chat, ed
 const ic = 'h-4 w-4 text-brand-600';
 const SECTIONS: { key: RequirementSection; title: string; icon: JSX.Element; ph: string }[] = [
   { key: 'objectives', title: 'Objectives', icon: <Target className={ic} />, ph: 'Add objective…' },
-  { key: 'stories', title: 'User stories', icon: <BookOpen className={ic} />, ph: 'As a … I want to … so that …' },
   { key: 'kpis', title: 'KPIs', icon: <Gauge className={ic} />, ph: 'e.g. Calls by specialty' },
-  { key: 'dimensions', title: 'Breakdowns', icon: <Layers3 className={ic} />, ph: 'e.g. Specialty' },
   { key: 'filters', title: 'Filters', icon: <Filter className={ic} />, ph: 'e.g. State' },
   { key: 'pages', title: 'Dashboard pages', icon: <LayoutGrid className={ic} />, ph: 'e.g. Territory Deep Dive' },
-  // Business rules, visual ideas and data needed are still extracted and used by the later
+  { key: 'stories', title: 'User stories', icon: <BookOpen className={ic} />, ph: 'As a … I want to … so that …' },
+  // Breakdowns, business rules, visual ideas and data needed are still extracted and used by the later
   // agents (and appear in the documentation); they're just not shown here to keep the page focused.
 ];
 
