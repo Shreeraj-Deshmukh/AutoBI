@@ -345,7 +345,17 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
       };
     }
     case 'kpiGroup': {
-      const values = dim ? [projection(dim), projection(measures[0])] : measures.map((m, i) => projection(m, c.labels?.[i] ?? m.property));
+      if (dim) {
+        // one value per category, side by side like the app's card: a one-row matrix with the categories as columns
+        const objects = {
+          columnHeaders: [{ properties: { fontSize: lit('9D'), alignment: lit("'Left'"), wordWrap: TRUE } }],
+          values: [{ properties: { fontSize: lit('16D'), fontFamily: lit("'Segoe UI Semibold'") } }],
+          subTotals: [{ properties: { rowSubtotals: FALSE, columnSubtotals: FALSE } }],
+          grid: [{ properties: { gridVertical: TRUE, gridHorizontal: FALSE } }],
+        };
+        return { visual: chart('pivotTable', state({ Columns: catRole(c.dimension, dim), Values: [projection(measures[0], ' ')] }), objects, title, sub, isOrdinalColumn(ctx, dim) ? sortBy(dim, 'Ascending') : sortBy(measures[0], 'Descending')) };
+      }
+      const values = measures.map((m, i) => projection(m, c.labels?.[i] ?? m.property));
       return { visual: chart('multiRowCard', state({ Values: values }), {}, c.title, sub) };
     }
     case 'extremes': {
@@ -486,6 +496,8 @@ function slicer(field: FieldExpr, opts: { mode: 'Dropdown' | 'Between'; single?:
     query: { queryState: state({ Values: [projection(field, opts.header)] }) },
     objects: {
       data: [{ properties: { mode: lit(pbirString(opts.mode)) } }],
+      // the header names the filter (the app's filter labels, e.g. "Custom Date")
+      ...(opts.header ? { header: [{ properties: { show: TRUE, text: lit(pbirString(opts.header)) } }] } : {}),
       ...(opts.single ? { selection: [{ properties: { singleSelect: TRUE } }] } : {}),
       ...(Object.keys(general).length ? { general: [{ properties: general }] } : {}),
     },
@@ -558,8 +570,8 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
   }
   if (ctx.model.hasDates) {
     const preset = PERIOD_PRESETS.includes(ctx.spec.defaultPeriod) ? PERIOD_LABELS[ctx.spec.defaultPeriod] : undefined;
-    slicers.push({ json: slicer({ table: PERIOD_TABLE, property: PERIOD_COLUMN, kind: 'Column' }, { mode: 'Dropdown', single: true, selected: preset }), width: 220 });
-    slicers.push({ json: slicer({ table: DATE_TABLE, property: 'Date', kind: 'Column' }, { mode: 'Between', header: 'Date range' }), width: 260 });
+    slicers.push({ json: slicer({ table: PERIOD_TABLE, property: PERIOD_COLUMN, kind: 'Column' }, { mode: 'Dropdown', single: true, selected: preset, header: 'Time Period' }), width: 220 });
+    slicers.push({ json: slicer({ table: DATE_TABLE, property: 'Date', kind: 'Column' }, { mode: 'Between', header: 'Custom Date' }), width: 260 });
   }
   for (const fd of ctx.spec.filters) {
     const f = fd.type === 'multi' ? colField(ctx, fd.field) : null;
@@ -567,7 +579,8 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     if (f) slicers.push({ json: slicer(f, { mode: 'Dropdown', header: fd.label || undefined }), width: 190 });
   }
   let x = MARGIN;
-  const SLICER_H = 60;
+  // tall enough for the header plus the date boxes of the Custom Date (between) slicer
+  const SLICER_H = 76;
   for (const s of slicers) {
     if (x + s.width > PAGE_W - MARGIN) {
       x = MARGIN;

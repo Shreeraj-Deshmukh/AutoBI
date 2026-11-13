@@ -3,7 +3,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { ArrowDownRight, ArrowUpRight, Minus, Download, Search, ChevronDown, X, ArrowUpDown, Layers, Maximize2, Info, Flag, ChevronRight, FilterX, CalendarDays, TrendingUp, SearchCheck, ListChecks, type LucideIcon } from 'lucide-react';
 import type { DashComponent, DashboardSpec, FieldRef, Foundation, MeasureDef, PeriodPreset } from '@/types';
 import { Engine, type AxisLevel, type FilterState, type WideRow, axisOf, display, isMatrix, splitRef, BLANK, UNMATCHED, VALUE } from '@/lib/engine';
-import { PERIOD_LABELS, bucketLabel, bucketRange, fmtPeriod, parseDate } from '@/lib/dates';
+import { PERIOD_LABELS, bucketLabel, bucketRange, fmtPeriod, parseDate, toIsoDate } from '@/lib/dates';
 import { CARD_TYPES, cardWeight } from '@/agents/designAgent';
 import { cx, Modal } from '@/components/ui';
 import { download, toCsv } from '@/lib/util';
@@ -94,7 +94,7 @@ export default function DashboardView({ spec, engine, foundation, fullscreen, he
                 {locked?.values.length && x.field === locked.field ? <div className="input truncate bg-slate-50 py-1.5 text-xs text-slate-500">{locked.values.join(', ')}</div> : <MultiFilter label={x.label || fieldLabel(foundation, x.field!)} options={engine.distinct(x.field!)} value={f.selections[x.field!] ?? []} onChange={(v) => setF({ ...f, selections: { ...f.selections, [x.field!]: v } })} />}
               </Labeled>
             ))}
-            <PeriodFilter value={f.period} custom={f.custom} onChange={(period, custom) => setF({ ...f, period, custom })} />
+            <PeriodFilter value={f.period} custom={f.custom} shown={current ?? { start: engine.minDate, end: engine.anchor }} onChange={(period, custom) => setF({ ...f, period, custom })} />
           </div>
           <div className="flex shrink-0 items-center gap-1 pt-5">
             <span className="rounded p-1 text-brand-700" title={`Period: ${fmtPeriod(current)}${previous ? ` · compared with ${fmtPeriod(previous)}` : ''}`}><Info className="h-4 w-4" /></span>
@@ -148,28 +148,33 @@ const TH = 'px-3 py-2 text-left text-[0.75rem] font-semibold text-white bg-brand
 
 // ───────────────────────────── filters ─────────────────────────────
 /** Filter panel cell: label above the control. */
-function Labeled({ label, children }: { label: string; children: ReactNode }) {
+function Labeled({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="min-w-0">
+    <div className={cx('min-w-0', wide && 'sm:col-span-2')}>
       <div className="mb-1 truncate text-[0.75rem] font-medium text-brand-700">{label}</div>
       {children}
     </div>
   );
 }
 
-function PeriodFilter({ value, custom, onChange }: { value: PeriodPreset; custom?: { start?: string; end?: string }; onChange: (p: PeriodPreset, c?: { start?: string; end?: string }) => void }) {
+/** Time Period preset and the Custom Date range; for a preset the date boxes show the dates it covers (read-only). */
+function PeriodFilter({ value, custom, shown, onChange }: { value: PeriodPreset; custom?: { start?: string; end?: string }; shown: { start: number; end: number }; onChange: (p: PeriodPreset, c?: { start?: string; end?: string }) => void }) {
   const off = value !== 'custom';
+  const range = { start: toIsoDate(shown.start), end: toIsoDate(shown.end) };
+  const start = off ? range.start : custom?.start ?? '';
+  const end = off ? range.end : custom?.end ?? '';
   return (
     <>
       <Labeled label="Time Period">
-        <select className="input py-1.5 text-xs" value={value} onChange={(e) => onChange(e.target.value as PeriodPreset, custom)} aria-label="Reporting period">
+        {/* switching to Custom starts from the dates currently shown */}
+        <select className="input py-1.5 text-xs" value={value} onChange={(e) => onChange(e.target.value as PeriodPreset, e.target.value === 'custom' ? custom ?? range : custom)} aria-label="Reporting period">
           {(Object.keys(PERIOD_LABELS) as PeriodPreset[]).map((k) => <option key={k} value={k}>{PERIOD_LABELS[k]}</option>)}
         </select>
       </Labeled>
-      <Labeled label="Custom Date">
-        <div className="flex gap-1.5">
-          <input type="date" disabled={off} className="input min-w-0 px-1.5 py-1.5 text-xs disabled:bg-slate-100" value={custom?.start ?? ''} onChange={(e) => onChange('custom', { ...custom, start: e.target.value })} aria-label="Start date" />
-          <input type="date" disabled={off} className="input min-w-0 px-1.5 py-1.5 text-xs disabled:bg-slate-100" value={custom?.end ?? ''} onChange={(e) => onChange('custom', { ...custom, end: e.target.value })} aria-label="End date" />
+      <Labeled label="Custom Date" wide>
+        <div className="flex gap-1.5" title={off ? 'Dates of the selected time period; choose "Custom range" to edit them' : undefined}>
+          <input type="date" disabled={off} className="input min-w-0 px-1.5 py-1.5 text-xs disabled:bg-slate-50 disabled:text-slate-600" value={start} onChange={(e) => onChange('custom', { ...custom, start: e.target.value })} aria-label="Start date" />
+          <input type="date" disabled={off} className="input min-w-0 px-1.5 py-1.5 text-xs disabled:bg-slate-50 disabled:text-slate-600" value={end} onChange={(e) => onChange('custom', { ...custom, end: e.target.value })} aria-label="End date" />
         </div>
       </Labeled>
     </>

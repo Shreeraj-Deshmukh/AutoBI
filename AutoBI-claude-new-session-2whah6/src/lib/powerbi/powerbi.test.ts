@@ -88,7 +88,7 @@ describe('Power BI export – Sanofi FRM kit', () => {
     // one client logo per page
     expect(types.filter((t) => t === 'image')).toHaveLength(r.build.spec.pages.length);
     expect(x.files['Sanofi_FRM.Report/StaticResources/RegisteredResources/ClientLogo.svg']).toMatch(/^<\?xml[\s\S]*<svg/);
-    const builtIn = ['card', 'multiRowCard', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image'];
+    const builtIn = ['card', 'multiRowCard', 'pivotTable', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image'];
     expect(types.filter((t) => !builtIn.includes(t))).toEqual([]);
   });
 
@@ -161,6 +161,15 @@ describe('Power BI export – Sanofi FRM kit', () => {
     // the default selection is stored on the parameter's fields column, as the NAMEOF() text of Region
     expect(JSON.stringify(geoSlicers[0].objects.general)).toContain('"Property":"Geo Level Fields"');
     expect(JSON.stringify(geoSlicers[0].objects.general)).toContain("Dim_Territory''[Region]");
+  });
+
+  it('shows every case type of "Resolution Rate by Case Type" side by side, and labels the date slicer', () => {
+    const visuals = Object.entries(x.files).filter(([p]) => p.endsWith('visual.json')).map(([, c]) => JSON.parse(c).visual);
+    const rate = visuals.find((v) => JSON.stringify(v.visualContainerObjects?.title ?? '').includes('Resolution Rate by Case Type'))!;
+    expect(rate.visualType).toBe('pivotTable');
+    expect(rate.query.queryState.Columns.projections[0].queryRef).toBe('Fact_Case_Activity.Case Type');
+    const dates = visuals.find((v) => v.visualType === 'slicer' && v.query.queryState.Values.projections[0].queryRef === 'Dim_Date.Date')!;
+    expect(JSON.stringify(dates.objects.header)).toContain("'Custom Date'");
   });
 
   it('zips to a single download', () => {
