@@ -419,10 +419,18 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
       const attrs = (c.tableColumns ?? []).map((r) => colField(ctx, r)).filter((x): x is FieldExpr => !!x);
       const flags = c.flags ? flagMeasure(ctx, c) : null;
       const days = attrs.find((a) => /days/i.test(a.property));
-      return {
-        visual: chart('tableEx', state({ Values: [projection(dim!), ...attrs.map((a) => projection(a)), ...measures.map((m) => projection(m)), ...(flags ? [projection(flags, 'Priority Flag')] : [])] }), {}, c.title, sub, sortBy(days ?? measures[0], 'Descending')),
-        filters: threshold(measures[0]),
+      const visual = chart('tableEx', state({ Values: [projection(dim!), ...attrs.map((a) => projection(a)), ...measures.map((m) => projection(m)), ...(flags ? [projection(flags, 'Priority Flag')] : [])] }), {}, c.title, sub, sortBy(days ?? measures[0], 'Descending'));
+      // columns share the full width of the box (Power BI would otherwise size them to their text):
+      // the category column gets a double share, attribute columns 1.5, measure and flag columns one share each
+      const cols: { f: FieldExpr; weight: number }[] = [{ f: dim!, weight: 2 }, ...attrs.map((f) => ({ f, weight: 1.5 })), ...measures.map((f) => ({ f, weight: 1 })), ...(flags ? [{ f: flags, weight: 1 }] : [])];
+      const fit = (width: number) => {
+        const usable = width - 40; // row padding and the vertical scrollbar
+        const total = cols.reduce((s, k) => s + k.weight, 0);
+        const o = visual.objects as Json;
+        o.columnHeaders = [{ properties: { autoSizeColumnWidth: FALSE } }];
+        o.columnWidth = cols.map((k) => ({ properties: { value: lit(`${Math.max(60, Math.floor((usable * k.weight) / total))}D`) }, selector: { metadata: queryRefOf(k.f) } }));
       };
+      return { visual, fit, filters: threshold(measures[0]) };
     }
     case 'records': {
       const cols = (c.tableColumns ?? []).map((r) => colField(ctx, r)).filter((x): x is FieldExpr => !!x);
