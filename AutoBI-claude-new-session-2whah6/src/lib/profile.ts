@@ -4,6 +4,12 @@ import { humanize, normalizeToken, uid } from './util';
 
 const ID_RE = /(^id$|_id$|id$|_key$|_code$|^key$)/i;
 const STATUS_RE = /(status|flag|opened|delivered|clicked|active|outcome|result)/i;
+/** Columns that look like a business key although they are not named "..._id" (SKU, Invoice_No, Order_Number, Item_Code). */
+const KEYISH_RE = /(^|_)(sku|code|number|no|num|nbr|ref|reference|key|id)$/i;
+/** Line / sequence counters inside a record: neither a key nor something to slice or sum by. */
+const LINE_RE = /^(line|row|seq|sequence|item|position|pos)(_?(no|num|number|nbr|id|seq))?$/i;
+/** Dates that describe a master record (when it was created / hired / launched) rather than a business event. */
+export const ATTRIBUTE_DATE_RE = /(onboard|hire|launch|birth|(^|_)dob($|_)|join|sign_?up|registr|created|creation|established|founded|expir|effective|valid_|modified|updated)/i;
 
 export function profileColumns(rows: Row[], columns: string[]): ColumnProfile[] {
   const n = rows.length;
@@ -80,6 +86,7 @@ export function profileColumns(rows: Row[], columns: string[]): ColumnProfile[] 
 
 function inferRole(p: ColumnProfile, n: number): ColumnRole {
   if (p.type === 'date') return 'date';
+  if (LINE_RE.test(p.name) && p.type === 'integer') return 'attribute';
   if (ID_RE.test(p.name) && (p.type !== 'number' || p.uniquePct > 50)) return p.uniquePct >= 99 && p.missing === 0 ? 'identifier' : 'foreign_key';
   if (p.type === 'boolean') return 'status';
   if (p.type === 'integer' || p.type === 'number') {
@@ -107,10 +114,17 @@ export function profileDataset(meta: DatasetMeta, rows: Row[]): DatasetProfile {
   // primary key: prefer an identifier column whose name matches the file, else first identifier
   const ids = columns.filter((c) => c.role === 'identifier');
   const fileTok = normalizeToken(meta.fileName);
-  const pk = ids.find((c) => fileTok.includes(normalizeToken(c.name.replace(/_?id$/i, '')))) ?? ids[0];
+  let pk: ColumnProfile | undefined = ids.find((c) => fileTok.includes(normalizeToken(c.name.replace(/_?id$/i, '')))) ?? ids[0];
+  // no "..._id" column: a text column that is filled and unique on every row and is named like a key (SKU, Invoice_No, Item_Code)
+  if (!pk && rows.length > 1) {
+    pk = columns.find((c) => c.type === 'string' && c.missing === 0 && c.distinct === rows.length && KEYISH_RE.test(c.name));
+    if (pk) pk.role = 'identifier';
+  }
   // Columns that are ID-like and unique but not the PK are probably foreign keys in a 1:1 relationship – keep as identifier.
   const dateCols = columns.filter((c) => c.role === 'date');
-  const entity = pk ? entityFromKey(pk.name) : humanize(meta.name);
+  // a key named only "SKU" / "Code" says nothing about the entity: take it from the table name ("Product Catalog" → Product)
+  const stem = pk ? pk.name.replace(/(_?id|_?key|_?code)$/i, '') : '';
+  const entity = pk && stem && !/^(sku|code|key|no|num|number|ref|reference|record|row)$/i.test(stem) ? entityFromKey(pk.name) : entityFromName(meta.name);
   return {
     datasetId: meta.id,
     rowCount: rows.length,
@@ -122,9 +136,17 @@ export function profileDataset(meta: DatasetMeta, rows: Row[]): DatasetProfile {
     label: humanize(meta.name),
     inference: '',
     confidence: 0.5,
-    dateField: dateCols[0]?.name,
+    // the event date: a date that describes the record itself (created, hired, launched) is used only when there is no other
+    dateField: (dateCols.find((c) => !ATTRIBUTE_DATE_RE.test(c.name)) ?? dateCols[0])?.name,
     columns,
   };
+}
+
+/** Entity from a table name: "Product Catalog" → Product, "customers_and_reps – Customers" → Customer. */
+function entityFromName(name: string) {
+  const words = humanize(name.split('–').pop() ?? name).split(' ').filter((w) => !/^(catalog|catalogue|master|list|data|table|file|export|extract|details?|info|dim|fact|sheet\d*)$/i.test(w));
+  const base = words.join(' ').trim() || humanize(name);
+  return base.replace(/ies$/i, 'y').replace(/([^s])s$/i, '$1');
 }
 
 /** Detect many-to-one relationships between datasets by name similarity + value overlap. */
@@ -182,13 +204,26 @@ export function classifyDatasets(profiles: DatasetProfile[], rels: Relationship[
   for (const p of profiles) {
     const outgoing = rels.filter((r) => r.fromDataset === p.datasetId);
     const incoming = rels.filter((r) => r.toDataset === p.datasetId);
+    // line-level table (order lines, invoice lines): no unique row id, but an id named after the table repeats on its lines
+    if (!p.primaryKey && !p.recordKey) {
+      const tableTok = normalizeToken(p.label);
+      const rk = p.columns.find((c) => ID_RE.test(c.name) && c.missing === 0 && c.distinct > 1 && c.distinct < p.rowCount && !outgoing.some((r) => r.fromField === c.name) && (() => { const st = normalizeToken(c.name.replace(/(_?id|_?key|_?code)$/i, '')); return st.length > 2 && tableTok.includes(st); })());
+      if (rk) {
+        p.recordKey = rk.name;
+        p.entity = entityFromKey(rk.name);
+      }
+    }
+    // a date that only describes the record (onboarded, hired, launched) does not make a table transactional
+    const attributeDate = !!p.dateField && ATTRIBUTE_DATE_RE.test(p.dateField);
+    if (attributeDate && p.primaryKey && (incoming.length || !outgoing.length)) p.dateField = undefined;
     const hasDate = !!p.dateField;
     const dims = p.columns.filter((c) => c.role === 'dimension' || c.role === 'attribute').map((c) => c.name);
     let kind: DatasetKind = 'unknown';
     const reasons: string[] = [];
     if (outgoing.length && hasDate) {
       kind = 'activity';
-      reasons.push(`each row is a dated ${p.entity.toLowerCase()} event (${p.dateField})`, `it references ${outgoing.map((r) => r.fromField).join(', ')} from other datasets`);
+      reasons.push(`each row is a dated ${p.entity.toLowerCase()} ${p.recordKey ? 'line' : 'event'} (${p.dateField})`, `it references ${outgoing.map((r) => r.fromField).join(', ')} from other datasets`);
+      if (p.recordKey) reasons.push(`${p.recordKey} repeats across the lines of one ${p.entity.toLowerCase()}, so ${p.entity.toLowerCase()}s are counted as distinct ${p.recordKey} values`);
     } else if (incoming.length && p.primaryKey) {
       kind = 'master';
       reasons.push(`${p.primaryKey} is unique on every row`, `other datasets reference it (${incoming.length} relationship${incoming.length > 1 ? 's' : ''})`);
@@ -242,7 +277,7 @@ export function detectIssues(profiles: DatasetProfile[], rels: Relationship[], l
     const pkCol = p.columns.find((c) => c.name === p.primaryKey);
     if (pkCol && pkCol.distinct < p.rowCount)
       issues.push({ id: uid('dq'), datasetId: p.datasetId, column: pkCol.name, severity: 'warning', type: 'Duplicate key values', message: `${p.rowCount - pkCol.distinct} ${pkCol.name} value(s) appear more than once in ${p.label}.`, impact: `Counting rows overstates the number of unique ${p.entity.toLowerCase()}s; use a distinct count for ${pkCol.name}.`, suggestion: 'Confirm whether repeated IDs are re-referrals or feed duplicates.', count: p.rowCount - pkCol.distinct });
-    if (!p.primaryKey)
+    if (!p.primaryKey && !p.recordKey)
       issues.push({ id: uid('dq'), datasetId: p.datasetId, severity: 'warning', type: 'No unique identifier', message: `${p.label} has no column that uniquely identifies each row.`, impact: 'Row-level reconciliation and joins are less reliable.', suggestion: 'Provide a unique record ID column.', count: 0 });
     for (const c of p.columns) {
       if (c.missing > 0) {

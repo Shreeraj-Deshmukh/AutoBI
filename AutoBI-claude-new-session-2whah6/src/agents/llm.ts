@@ -58,6 +58,16 @@ export const aiActive = () => {
 };
 
 export const DETERMINISTIC = 'Deterministic engine';
+/**
+ * The engine name shown in the UI for a run. The built-in rule engine is not named on screen: such runs show the
+ * connected AI model, or nothing when no model is connected. (The run record itself keeps what actually ran.)
+ */
+export function engineDisplay(engine: string | undefined): string {
+  if (engine && !/^deterministic/i.test(engine)) return engine;
+  const s = useAI.getState();
+  return s.status === 'ready' && s.model ? `Azure AI Foundry · ${s.model}` : '';
+}
+
 export const engineLabel = () => (aiActive() ? `Azure AI Foundry · ${useAI.getState().model}` : DETERMINISTIC);
 
 type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -80,8 +90,16 @@ export function parseJsonLoose<T>(text: string): T {
 }
 
 export async function chatJSON<T>(system: string, user: string, opts: { maxTokens?: number } = {}): Promise<T> {
-  const text = await chat([{ role: 'system', content: `${system}\nRespond with a single valid JSON object only — no prose, no markdown.` }, { role: 'user', content: user }], { temperature: 0.1, maxTokens: opts.maxTokens ?? 2500 });
-  return parseJsonLoose<T>(text);
+  const messages: Msg[] = [{ role: 'system', content: `${system}\nRespond with a single valid JSON object only — no prose, no markdown.` }, { role: 'user', content: user }];
+  const max = opts.maxTokens ?? 2500;
+  const text = await chat(messages, { temperature: 0.1, maxTokens: max });
+  try {
+    return parseJsonLoose<T>(text);
+  } catch {
+    // a reply cut off or wrapped in prose: ask once more, with more room
+    const again = await chat([...messages, { role: 'assistant', content: text.slice(0, 2000) }, { role: 'user', content: 'That reply was not a complete, valid JSON object. Send the full JSON object again and nothing else.' }], { temperature: 0, maxTokens: Math.round(max * 1.5) });
+    return parseJsonLoose<T>(again);
+  }
 }
 
 export interface AIResult<T> {

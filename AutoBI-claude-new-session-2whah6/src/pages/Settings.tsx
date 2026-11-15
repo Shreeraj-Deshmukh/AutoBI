@@ -35,14 +35,14 @@ export default function Settings() {
             <div className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" />Connected · model <b>{ai.model}</b> · {ai.endpointHost}</div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={ai.enabled} onChange={(e) => ai.setEnabled(e.target.checked)} />
-              Use the AI model in agents (turn off to run fully deterministic)
+              Use the AI model in agents (turn off to run without the model)
             </label>
             <div className="flex items-center gap-3">
               <Button size="sm" onClick={run} loading={test.state === 'running'}>Test connection</Button>
               {test.state === 'ok' && <span className="text-xs text-emerald-700">{test.text}</span>}
               {test.state === 'error' && <span className="text-xs text-red-600">{test.text}</span>}
             </div>
-            {ai.lastError && <Callout tone="warning" title="Last AI call failed — the deterministic engine was used">{ai.lastError}</Callout>}
+            {ai.lastError && <Callout tone="warning" title="Last AI call failed — the built-in engine was used">{ai.lastError}</Callout>}
           </div>
         )}
         {(ai.status === 'unconfigured' || ai.status === 'offline') && (
@@ -64,7 +64,7 @@ AZURE_AI_MODEL=gpt-4o        # your deployment / model name`}</pre>
             <li key={a} className="text-sm"><span className="font-medium text-navy-900">{a}</span><span className="text-slate-500"> — {b}</span></li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-slate-500">If a call fails, the agent falls back to its deterministic engine and the run is labelled accordingly.</p>
+        <p className="mt-3 text-xs text-slate-500">If a call fails, the agent falls back to its built-in engine and the run is labelled accordingly.</p>
       </Card>
       </div>
     </div>

@@ -7,6 +7,56 @@ import { bindCatalogue, catalogueTables } from '@/lib/catalogue';
 
 /** Reporting Foundation Agent: logical model, field mappings and KPI logic (simulated data-mart workspace). */
 
+/** Numeric columns that must not be added up (prices, rates, percentages, scores): they are averaged. */
+const NON_ADDITIVE = new Set(['price', 'rate', 'pct', 'percent', 'percentage', 'ratio', 'score', 'rating', 'share', 'index', 'avg', 'average', 'mean']);
+export const isNonAdditive = (column: string) => tokens(column).some((t) => NON_ADDITIVE.has(t));
+const TARGET_WORDS = new Set(['target', 'quota', 'budget', 'goal', 'plan', 'planned', 'forecast']);
+const stemEq = (a: string, b: string) => a === b || (a.length >= 5 && b.length >= 5 && a.slice(0, 5) === b.slice(0, 5));
+
+/**
+ * Business rules such as "Exclude cancelled orders from sales": when the excluded word is a value of a status /
+ * category column, amounts summed from that table leave those rows out.
+ */
+function applyExclusionRules(measures: MeasureDef[], u: DataUnderstanding, spec: RequirementSpec | null) {
+  for (const rule of spec?.rules ?? []) {
+    const m = /\b(?:exclud\w*|ignor\w*|do(?:es)? not (?:count|include)|don't (?:count|include)|not counted)\b(.*)$/i.exec(rule.text);
+    if (!m) continue;
+    const words = tokens(m[1]);
+    if (!words.length) continue;
+    for (const p of u.profiles.filter((x) => x.kind === 'activity')) {
+      for (const c of p.columns.filter((x) => (x.role === 'status' || x.role === 'dimension') && x.distinct <= 15)) {
+        const hit = c.topValues.find((v) => { const vt = tokens(v.value); return vt.length > 0 && vt.every((t) => words.some((w) => stemEq(w, t))); });
+        if (!hit) continue;
+        for (const x of measures.filter((x) => x.datasetId === p.datasetId && x.kind === 'sum' && !conditionsOf(x).some((k) => k.field === c.name))) {
+          const cond = { field: c.name, op: 'neq' as const, values: [hit.value] };
+          if (x.condition) x.conditions = [...(x.conditions ?? []), cond];
+          else x.condition = cond;
+          x.assumptions = [...x.assumptions, `Business rule "${rule.text}": rows where ${c.name} is "${hit.value}" are left out.`];
+        }
+      }
+    }
+  }
+}
+
+/** Actual vs target: a target / quota / budget column is compared with the matching amount summed from the transactions. */
+function addTargetAttainment(measures: MeasureDef[], u: DataUnderstanding, add: (m: Omit<MeasureDef, 'id' | 'logic'>) => MeasureDef) {
+  for (const p of u.profiles) {
+    for (const c of p.columns.filter((x) => x.role === 'measure' && tokens(x.name).some((t) => TARGET_WORDS.has(t)))) {
+      const rest = tokens(c.name).filter((t) => !TARGET_WORDS.has(t));
+      const actual = measures
+        .filter((m) => m.kind === 'sum' && m.datasetId !== p.datasetId && m.field && !tokens(m.field).some((t) => TARGET_WORDS.has(t)))
+        .map((m) => ({ m, s: tokens(m.field!).filter((t) => rest.includes(t)).length }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)[0]?.m;
+      if (!actual) continue;
+      const target = measures.find((m) => m.kind === 'sum' && m.datasetId === p.datasetId && m.field === c.name) ?? add({ name: `Total ${humanize(c.name)}`, description: `Sum of ${c.name}.`, kind: 'sum', datasetId: p.datasetId, field: c.name, format: 'number', assumptions: [] });
+      const name = `${humanize(rest.join(' ')) || humanize(actual.field!)} Target Attainment`;
+      if (measures.some((m) => m.name === name)) continue;
+      add({ name, description: `${actual.name} as a percentage of ${target.name}.`, kind: 'ratio', numeratorId: actual.id, denominatorId: target.id, format: 'percent', assumptions: [`Targets are set per period in ${p.label}; compare over complete target periods.`] });
+    }
+  }
+}
+
 const tableName = (kind: 'fact' | 'dimension', entity: string) => `${kind === 'fact' ? 'Fact' : 'Dim'}_${entity.replace(/\s+/g, '_')}${kind === 'fact' ? '_Activity' : ''}`;
 
 export function measureLogic(m: MeasureDef, all: MeasureDef[], labelOf: (id: string) => string): string {
@@ -54,6 +104,7 @@ export function reconcileMappings(u: DataUnderstanding, f: Foundation) {
 /** Add rule-based measures for requirement KPIs not yet covered (used after AI proposals). */
 export function fillRequirementGaps(f: Foundation, u: DataUnderstanding, spec: RequirementSpec | null) {
   const label = (id: string) => u.profiles.find((p) => p.datasetId === id)?.label ?? id;
+  const before = new Set(f.measures.map((m) => m.id));
   for (const k of spec?.kpis ?? []) {
     if (f.measures.some((m) => m.requirementRef?.toLowerCase() === k.text.toLowerCase() || m.catalogueRef?.toLowerCase() === k.text.toLowerCase())) continue;
     const kt = tokens(k.text.replace(/\s+by\s+.+$/i, ''));
@@ -61,6 +112,8 @@ export function fillRequirementGaps(f: Foundation, u: DataUnderstanding, spec: R
     const built = buildMeasureFromText(k.text, u, f.measures);
     if (built) f.measures.push(...built.extra, built.main);
   }
+  // rule-built additions follow the business rules too (the generic and AI-defined measures already do)
+  applyExclusionRules(f.measures.filter((m) => !before.has(m.id)), u, spec);
   for (const m of f.measures) m.logic = measureLogic(m, f.measures, label);
   return f;
 }
@@ -122,12 +175,17 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
   for (const p of u.profiles.filter((x) => x.kind === 'activity')) {
     const ent = p.entity;
     const sentSuffix = p.dateField && /sent/i.test(p.dateField) ? ' Sent' : '';
-    const total = add({ name: `Total ${plural(ent)}${sentSuffix}`, description: `Number of ${ent.toLowerCase()} records${sentSuffix ? ' sent' : ''} in the selected period.`, kind: 'count', datasetId: p.datasetId, field: p.primaryKey, format: 'number', assumptions: p.primaryKey ? [] : ['No unique identifier – counts rows.'] });
+    // line-level table (order lines): the business record is counted once, as a distinct count of its repeating id
+    const lines = !p.primaryKey && !!p.recordKey;
+    const key = p.primaryKey ?? p.recordKey;
+    const countKind = lines ? ('countDistinct' as const) : ('count' as const);
+    const total = add({ name: `Total ${plural(ent)}${sentSuffix}`, description: `Number of ${ent.toLowerCase()} records${sentSuffix ? ' sent' : ''} in the selected period.`, kind: countKind, datasetId: p.datasetId, field: key, format: 'number', assumptions: p.primaryKey ? [] : lines ? [`Rows are ${ent.toLowerCase()} lines: each ${ent.toLowerCase()} is counted once (distinct ${p.recordKey}).`] : ['No unique identifier – counts rows.'] });
+    if (lines) add({ name: `Total ${ent} Lines`, description: `Number of ${ent.toLowerCase()} lines (rows) in the selected period.`, kind: 'count', datasetId: p.datasetId, field: undefined, format: 'number', assumptions: [] });
     let prevPositive: MeasureDef | null = null;
     for (const c of p.columns.filter((c) => c.role === 'status')) {
       const pos = positiveValue(c);
       if (!pos) continue;
-      const cm = add({ name: `${humanize(pos)} ${plural(ent)}`, description: `${plural(ent)} where ${c.name} is "${pos}".`, kind: 'count', datasetId: p.datasetId, field: p.primaryKey, condition: { field: c.name, op: 'eq', values: [pos] }, format: 'number', assumptions: [`"${pos}" is treated as the positive outcome of ${c.name}; other values (${c.topValues.filter((v) => v.value !== pos).map((v) => v.value).join(', ')}) are excluded.`] });
+      const cm = add({ name: `${humanize(pos)} ${plural(ent)}`, description: `${plural(ent)} where ${c.name} is "${pos}".`, kind: countKind, datasetId: p.datasetId, field: key, condition: { field: c.name, op: 'eq', values: [pos] }, format: 'number', assumptions: [`"${pos}" is treated as the positive outcome of ${c.name}; other values (${c.topValues.filter((v) => v.value !== pos).map((v) => v.value).join(', ')}) are excluded.`] });
       const base = prevPositive ?? total;
       const rateWord = /deliver/i.test(pos) ? 'Delivery' : /open/i.test(pos) ? 'Open' : humanize(pos);
       add({ name: `${ent} ${rateWord} Rate`, description: `${cm.name} as a percentage of ${base.name}.`, kind: 'ratio', numeratorId: cm.id, denominatorId: base.id, format: 'percent', assumptions: [`Denominator is ${base.name}${prevPositive ? ' (only records that reached the previous stage are eligible)' : ''}.`] });
@@ -135,7 +193,7 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
     }
     for (const c of p.columns.filter((c) => c.role === 'measure')) {
       // durations and ages are averaged, amounts and volumes are summed
-      if (/(days|duration|time|age|lag|tat|hours|minutes)/i.test(c.name)) add({ name: `Avg ${humanize(c.name)}`, description: `Average of ${c.name} where present.`, kind: 'avg', datasetId: p.datasetId, field: c.name, format: 'decimal', assumptions: ['Blank values are excluded from the average.'] });
+      if (/(days|duration|time|age|lag|tat|hours|minutes)/i.test(c.name) || isNonAdditive(c.name)) add({ name: `Avg ${humanize(c.name)}`, description: `Average of ${c.name} where present.`, kind: 'avg', datasetId: p.datasetId, field: c.name, format: 'decimal', assumptions: ['Blank values are excluded from the average.'] });
       else add({ name: `Total ${humanize(c.name)}`, description: `Sum of ${c.name}.`, kind: 'sum', datasetId: p.datasetId, field: c.name, format: 'number', assumptions: [] });
     }
     const fk = u.relationships.find((r) => r.fromDataset === p.datasetId && r.status !== 'rejected' && u.profiles.find((x) => x.datasetId === r.toDataset)?.kind === 'master');
@@ -148,6 +206,7 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
   for (const p of u.profiles.filter((x) => x.kind === 'master')) {
     add({ name: `Total ${plural(p.entity)}`, description: `Number of ${p.entity.toLowerCase()}s in ${p.label}.`, kind: 'count', datasetId: p.datasetId, field: p.primaryKey, format: 'number', assumptions: ['Not affected by the reporting period filter (master data).'] });
   }
+  addTargetAttainment(measures, u, add);
   // ProcDNA KPI catalogue: catalogue-defined measures for whatever the data supports (FRM case log, SP journey)
   const catalogue = bindCatalogue(u, measures);
   measures.push(...catalogue.measures);
@@ -165,6 +224,7 @@ export function runFoundation(u: DataUnderstanding, spec: RequirementSpec | null
     }
     measures.push(...built.extra, built.main);
   }
+  applyExclusionRules(measures, u, spec);
   for (const m of measures) m.logic = measureLogic(m, measures, label);
 
   // link to requirements

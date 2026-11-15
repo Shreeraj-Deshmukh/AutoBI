@@ -17,6 +17,9 @@ body { @apply bg-slate-50 text-slate-800 antialiased; font-feature-settings: 'cv
 /* The interface is designed at 90% scale: every size is in rem, so this one value scales the whole UI
    (the same effect as browser zoom at 90%, and it still follows the user's own zoom and font settings). */
 html { font-size: 90%; }
+/* Laptop screens (about 1230px wide at 100% zoom on a 1536px display): one step smaller, so the two-column
+   workspace (main area left, assistant and agent log right) looks the same as it does on a wider screen. */
+@media (max-width: 1300px) { html { font-size: 81%; } }
 
 @layer components {
   .card { @apply bg-white border border-slate-200 rounded-xl shadow-card; }

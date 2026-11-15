@@ -19,7 +19,14 @@ const VALUE_SYNONYMS: Record<string, string[]> = {
   unresolved: ['open'], open: ['open'], resolved: ['resolved'],
   appeal: ['appeal'], appealed: ['appeal'],
   delayed: ['delayed'], completed: ['completed'], shipped: ['shipped'],
+  cancellation: ['cancelled', 'canceled'], cancelled: ['cancelled', 'canceled'], canceled: ['cancelled', 'canceled'],
+  return: ['returned'], returned: ['returned'], refund: ['refunded'], refunded: ['refunded'],
+  churn: ['churned'], churned: ['churned'], won: ['won'], win: ['won'], conversion: ['converted'], converted: ['converted'],
+  delivery: ['delivered'], delivered: ['delivered'], completion: ['completed'], failure: ['failed'], failed: ['failed'],
 };
+
+/** Words for a volume column ("units sold" → Quantity). */
+const VOLUME_WORDS = ['quantity', 'qty', 'volume', 'unit'];
 
 const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10, fourteen: 14, thirty: 30 };
 
@@ -91,7 +98,7 @@ export function buildMeasureFromText(text: string, u: DataUnderstanding, existin
   let ds = findEntityDataset(clean, u.profiles);
   if (!ds || ds.kind !== 'activity') ds = acts.find((p) => valueConditions(p, want).length) ?? acts[0];
   if (!ds) return null;
-  const key = ds.primaryKey;
+  const key = ds.primaryKey ?? ds.recordKey;
   const isRate = /\b(rate|ratio|percent|percentage|share|%)\b/i.test(clean);
   // "dropped off before therapy initiation": the part after before/without names what did NOT happen
   const positive = textTokens(clean.replace(/\b(before|prior to|without|instead of|excluding|other than)\b.*$/i, ''));
@@ -102,6 +109,14 @@ export function buildMeasureFromText(text: string, u: DataUnderstanding, existin
   const base = { description: `Built from the requirement "${text}".`, assumptions: [`Interpreted from "${text}" — review the conditions.`], requirementRef: text };
   const countDistinct = !!key && (ds.columns.find((c) => c.name === key)?.distinct ?? 0) < ds.rowCount;
   const counter = (n: string, cs: MeasureCondition[]): MeasureDef => ({ id: uid('m'), name: countDistinct && !cs.length && /^total /i.test(n) ? `Unique ${humanize(ds!.entity)}s` : n, kind: countDistinct ? 'countDistinct' : 'count', datasetId: ds!.datasetId, field: key, condition: cs[0], conditions: cs.slice(1), format: 'number', logic: '', ...base, description: `${humanize(ds!.entity)}s${cs.length ? ' where ' + cs.map((c) => `${c.field} ${c.op} ${c.values.join('/')}`).join(' and ') : ''}.` });
+
+  // "average order value" / "average deal size": the amount per record
+  const perRecord = /^(?:average|avg|mean)\s+([a-z]+)\s+(?:value|size|amount)$/i.exec(clean);
+  if (perRecord && tokens(ds.entity).includes(tokens(perRecord[1])[0])) {
+    const amount = existing.filter((m) => m.kind === 'sum' && m.datasetId === ds!.datasetId && m.field && !/(cost|quantity|qty|units?|discount|tax|gross)/i.test(m.field)).sort((a, b) => Number(/net|revenue|sales/i.test(b.field!)) - Number(/net|revenue|sales/i.test(a.field!)))[0];
+    const records = existing.find((m) => (m.kind === 'count' || m.kind === 'countDistinct') && m.datasetId === ds!.datasetId && m.field === key && !m.condition);
+    if (amount && records) return { main: { id: uid('m'), name, kind: 'ratio', numeratorId: amount.id, denominatorId: records.id, format: 'decimal', logic: '', ...base, description: `${amount.name} divided by ${records.name}.` }, extra: [] };
+  }
 
   // averages / sums of a numeric column ("average time to therapy initiation")
   if (/\b(average|avg|mean|median|total|sum)\b/i.test(clean) && !/\b(patients?|cases?|hcps?|accounts?)\b(?! .*\b(days|time|amount)\b)/i.test(clean.replace(/^(average|avg|mean|total)\s+/i, ''))) {
@@ -135,6 +150,16 @@ export function buildMeasureFromText(text: string, u: DataUnderstanding, existin
     return { main: ratio, extra: [...(n0 ? [] : [numM]), ...(d0 ? [] : [denM])] };
   }
 
+  // a plain amount or volume ("Net sales", "Units sold"): the sum of the matching numeric column
+  if (!conds.length && !/\b(number of|count of|margin|profit|average|avg|per|vs|versus|growth|attainment)\b/i.test(clean)) {
+    const volume = /\bunits?\b|\bvolume\b|\bquantity\b/i.test(clean);
+    const ranked = ds.columns
+      .filter((c) => c.role === 'measure' && !/(price|rate|pct|percent|ratio|score)/i.test(c.name))
+      .map((c) => ({ c, s: tokens(c.name).filter((t) => want.has(t) && t !== 'total').length + (volume && tokens(c.name).some((t) => VOLUME_WORDS.includes(t)) ? 1 : 0) }))
+      .filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s);
+    if (ranked.length && (ranked.length === 1 || ranked[0].s > ranked[1].s)) return { main: { id: uid('m'), name, kind: 'sum', datasetId: ds.datasetId, field: ranked[0].c.name, format: 'number', logic: '', ...base, description: `Sum of ${ranked[0].c.name}.` }, extra: [] };
+  }
   if (!conds.length && !/\b(total|all|number of)\b/i.test(clean)) return null;
   return { main: counter(name, conds), extra: [] };
 }

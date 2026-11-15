@@ -48,11 +48,14 @@ interface Ctx {
 
 function measuresOf(f: Foundation, datasetId: string) {
   const own = f.measures.filter((m) => m.datasetId === datasetId && !isCatalogueHelper(m));
-  const ratios = f.measures.filter((m) => m.kind === 'ratio' && own.some((o) => o.id === m.numeratorId));
-  const count = own.find((m) => m.kind === 'count' && !m.condition);
-  // a volume measure (TRx, revenue, units…) is a better headline than a row count
-  const volume = own.find((m) => m.kind === 'sum' && /(trx|revenue|amount|sales|units|quantity|value|net|volume|spend)/i.test(m.field ?? ''));
-  return { total: volume ?? count, count, conditional: own.filter((m) => m.kind === 'count' && m.condition), reached: own.find((m) => m.kind === 'countDistinct'), sums: own.filter((m) => m.kind === 'sum'), rates: ratios.filter((r) => r.format === 'percent'), avgs: ratios.filter((r) => r.format !== 'percent') };
+  const ratios = f.measures.filter((m) => m.kind === 'ratio' && own.some((o) => o.id === m.numeratorId) && (() => { const d = f.measures.find((x) => x.id === m.denominatorId); return !d?.datasetId || d.datasetId === datasetId; })());
+  // line-level table: its records are counted as a distinct count named "Total <records>"
+  const recordCount = own.find((m) => m.kind === 'countDistinct' && !m.condition && /^Total /.test(m.name) && own.some((o) => o.kind === 'count' && !o.condition && / Lines$/.test(o.name)));
+  const count = recordCount ?? own.find((m) => m.kind === 'count' && !m.condition);
+  // a volume measure (TRx, revenue, units…) is a better headline than a row count; an amount the requirements name comes first
+  const volumes = own.filter((m) => m.kind === 'sum' && /(trx|revenue|amount|sales|units|quantity|value|net|volume|spend)/i.test(m.field ?? ''));
+  const volume = volumes.find((m) => m.requirementRef && /(net|revenue|sales)/i.test(m.field ?? '')) ?? volumes[0];
+  return { total: volume ?? count, count, conditional: own.filter((m) => (m.kind === 'count' || (recordCount && m.kind === 'countDistinct')) && m.condition), reached: own.find((m) => m.kind === 'countDistinct' && m !== recordCount), sums: own.filter((m) => m.kind === 'sum'), rates: ratios.filter((r) => r.format === 'percent'), avgs: ratios.filter((r) => r.format !== 'percent') };
 }
 
 // Labels and visibility follow the reporting foundation's field mapping.

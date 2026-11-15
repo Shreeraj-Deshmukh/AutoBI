@@ -85,13 +85,13 @@ test('full lifecycle on a new project with uploaded data', async ({ page }) => {
   // Testing
   await page.getByRole('button', { name: /Generate test cases/ }).click();
   await waitIdle(page);
-  await page.getByRole('button', { name: 'Run automated tests' }).click();
-  await waitIdle(page);
-  await expect(page.getByTestId('test-row').filter({ hasText: /Passed(Automated|Manual)/ }).first()).toBeVisible();
-  await expect(page.getByTestId('test-row').filter({ hasText: /Failed(Automated|Manual)/ })).toHaveCount(0);
+  // there is no "Run automated tests" step: generated cases are checked against the source data right away
+  await expect(page.getByRole('button', { name: 'Run automated tests' })).toHaveCount(0);
+  await expect(page.getByTestId('test-row').filter({ hasText: /Passed/ }).first()).toBeVisible();
+  await expect(page.getByTestId('test-row').filter({ hasText: /Failed/ })).toHaveCount(0);
   await page.getByRole('tab', { name: /Data Validation Testing/ }).click();
-  await expect(page.getByTestId('test-row').filter({ hasText: /Passed(Automated|Manual)/ }).first()).toBeVisible();
-  await expect(page.getByTestId('test-row').filter({ hasText: /Failed(Automated|Manual)/ })).toHaveCount(0);
+  await expect(page.getByTestId('test-row').filter({ hasText: /Passed/ }).first()).toBeVisible();
+  await expect(page.getByTestId('test-row').filter({ hasText: /Failed/ })).toHaveCount(0);
 
   // Analyst-led UAT: execute every manual scenario, then sign off
   await page.getByRole('tab', { name: /^UAT/ }).click();

@@ -39,4 +39,27 @@ describe('FRM demo storyline with an AI model connected', () => {
     expect(b.changed).toBe(true);
     expect(b.spec.filters.map((x) => x.label)).toEqual(['Reporting Period', 'Region', 'FRM Territory', 'Sales Territory', 'Market', 'Product', 'Account', 'PBM Name', 'Payer']);
   });
+  it('a reply with names as lists, objects or numbers still becomes a design (no crash, no silent fallback)', async () => {
+    const dim = r.u.profiles.flatMap((p) => p.columns.filter((c) => c.role === 'dimension').map((c) => c.name))[0];
+    chat.mockResolvedValue({
+      pages: [
+        { name: ['Access Drivers'], description: { text: 'x' }, sections: [{ name: { name: 'Breakdowns' }, components: [
+          { type: 'bar', title: ['By category'], measures: m[0], dimension: [dim], width: 6 },
+          { type: 'bar', title: 42, measures: [{ name: m[1] }], dimension: { column: dim }, series: ['x', 'y'] },
+          { type: 'kpi', measures: [m[0]], dimension: 7 },
+          null,
+          'not a component',
+        ] }, { name: 'Broken', components: 'none' }] },
+        { name: 'No sections', sections: null },
+      ],
+      filters: [{ column: dim }, [dim], 12],
+    });
+    const design = await aiGenerateDesign(r.u, r.f, r.spec, r.build.spec);
+    const page = design.pages.find((p) => p.name === 'Access Drivers')!;
+    expect(page.components.map((c) => c.type)).toEqual(['bar', 'bar', 'kpi']);
+    expect(page.components[0].dimension).toMatch(new RegExp(`::${dim}$`));
+    expect(page.components[1].dimension).toMatch(new RegExp(`::${dim}$`));
+    expect(page.components[0].section).toBe('Breakdowns');
+    expect(page.components[1].title).toBe('42');
+  });
 });

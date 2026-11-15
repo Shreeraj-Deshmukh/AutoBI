@@ -8,12 +8,12 @@ import AgentPanel, { AgentProgress } from './AgentPanel';
  */
 export default function StageLayout({ p, agent, next, main, side }: { p: Project; agent: AgentId; next?: string; main: ReactNode; side?: ReactNode }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_31.875rem]">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_min(31.875rem,38%)]">
       <div className="min-w-0 space-y-5">
         <AgentProgress p={p} agent={agent} />
         {main}
       </div>
-      <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
         {side}
         <AgentPanel p={p} agent={agent} next={next} />
       </div>

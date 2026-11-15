@@ -78,6 +78,9 @@ export function extractRequirements(text: string, info: Partial<ProjectInfo>): R
   }
   if (!spec.objectives.length && info.objective) add('objectives', info.objective);
 
+  // patient-access / FRM briefs are specified from their own vocabulary and the ProcDNA KPI catalogue (below)
+  const patientAccess = (/(funnel|prior authori[sz]ation|\bPA\b|therapy initiation|reimbursement|access barrier|patient access)/i.test(t) && /\bpatients?\b/i.test(t)) || (/\bFRMs?\b|field reimbursement/i.test(t) && /\bcases?\b/i.test(t));
+
   // ── metrics & datasets
   const hits = METRICS.filter((m) => m.re.test(t));
   const emailEngagement = /email[^.]*\b(performance|engagement|open|deliver|campaign)/i.test(t);
@@ -94,7 +97,26 @@ export function extractRequirements(text: string, info: Partial<ProjectInfo>): R
   // ── named rates such as "call completion rate"
   const rateRe = /\b([a-z]+)\s+(completion|conversion|response|open|delivery|refund|retention|adherence)\s+rate\b/gi;
   let rm: RegExpExecArray | null;
-  while ((rm = rateRe.exec(t))) add('kpis', `${cap(rm[1].toLowerCase())} ${rm[2].toLowerCase()} rate`);
+  while ((rm = rateRe.exec(t))) add('kpis', /^(track|monitor|measure|show|report|and|the|our|a|with|of|by)$/i.test(rm[1]) ? `${cap(rm[2].toLowerCase())} rate` : `${cap(rm[1].toLowerCase())} ${rm[2].toLowerCase()} rate`);
+
+  // ── metrics listed after "track / measure / monitor / report on" (any domain): "track net sales, margin % and units sold"
+  const METRIC_HINT = /(rate|ratio|%|percent|margin|profit|average|avg|median|number of|count of|total|volume|value|revenue|sales|units|quantity|cost|spend|attainment|growth|share|days|time to|duration|backlog|utili[sz]ation|score|price|discount|churn|retention|conversion)/i;
+  const listRe = /\b(?:track|measure|monitor|report(?:ing)? on)\s+([^.;]+)/gi;
+  let lm: RegExpExecArray | null;
+  while (!patientAccess && (lm = listRe.exec(t))) {
+    const clause = lm[1].split(/\b(?:so that|in order to|to help|which|that)\b/i)[0];
+    for (const raw of clause.split(/,|\band\b/i)) {
+      const part = cleanPhrase(raw.replace(/\b(?:over time|monthly|weekly|quarterly|daily|yearly|annually)\b.*$/i, '').replace(/\s+(?:by|across|per|for each)\s+.*$/i, '').trim().replace(/^(?:overall|both|also)\s+/i, ''));
+      const words = part.split(/\s+/).filter(Boolean);
+      if (!part || words.length > 7 || !METRIC_HINT.test(part) || /^(compare|show|identify|let|see|changes?)\b/i.test(part)) continue;
+      add('kpis', part.replace(/^(?:number|count) of\s+/i, 'Total '));
+    }
+  }
+  const namedRate = /\b(cancellation|return|churn|attainment|win|fill|closure|denial|rejection|defect|error|bounce|click|attrition|utili[sz]ation|occupancy|renewal|abandonment)\s+rate\b/gi;
+  while (!patientAccess && (lm = namedRate.exec(t))) add('kpis', `${cap(lm[1].toLowerCase())} rate`);
+  // ── exclusions stated in the brief are business rules ("Exclude cancelled orders from sales")
+  const exclRe = /\b((?:exclude|excluding|do not count|don't count|ignore)\b[^.;]*)/gi;
+  while ((lm = exclRe.exec(t))) add('rules', lm[1].trim());
 
   // ── "X by Y" patterns → dimensions + breakdown KPIs
   const primary = hits.find((h) => h.kpis.length)?.entity ?? 'record';
@@ -105,6 +127,7 @@ export function extractRequirements(text: string, info: Partial<ProjectInfo>): R
     if (/filter|filtering|sorted|grouped/.test(lead)) continue;
     const dim = normDim(m[2]);
     if (!dim || dim.split(' ').length > 3) continue;
+    if (!patientAccess && /\b(sales|revenue|amount|value|volume|margin|profit|units|quantity|spend|cost|count|orders)\b/i.test(dim) && /\b(top|bottom|rank\w*|highest|lowest|best|worst)\b/i.test(lower.slice(Math.max(0, m.index - 40), m.index + m[0].length))) continue;
     add('dimensions', humanize(dim));
     if (/\bacross\b/.test(m[0])) continue; // "across regions" = scope, not an explicit breakdown
     const metricEntity = METRICS.find((x) => x.re.test(lead))?.entity ?? (/(activity|engagement|volume)/.test(lead) ? primary : null);

@@ -203,6 +203,8 @@ export interface DatasetProfile {
   inference: string;
   confidence: number;
   dateField?: string;
+  /** Line-level table without a unique row id: the repeating id that identifies the business record (e.g. Order_ID on order lines). Counts use a distinct count of it. */
+  recordKey?: string;
   columns: ColumnProfile[];
   /** The user renamed the dataset or changed its kind; kept when the agent re-runs. */
   labelEdited?: boolean;

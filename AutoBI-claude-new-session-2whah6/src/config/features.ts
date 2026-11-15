@@ -10,6 +10,12 @@ export const FEATURES = {
   /** Sample kits offered in the app (New project, Dataset library, Projects page downloads): access | brand | hcp | retail. */
   sampleKits: ['access'] as string[],
   /**
+   * "Run automated tests" as a user-facing function (run / retest buttons, "Automated" labels). Off: the controls
+   * and labels are hidden and test cases are checked against the source data on their own when they are
+   * generated or when data / KPI logic changes, so results, defects and the UAT gate work as before.
+   */
+  automatedTests: false,
+  /**
    * Demo storyline: filters the FRM report starts WITHOUT, for the presenter to add with the design
    * assistant ("Add a payer filter", "Add a time period filter"). Once added back, the dashboard and the
    * Power BI export are exactly the full FRM report. 'period' = Time Period + Custom Date; others name a

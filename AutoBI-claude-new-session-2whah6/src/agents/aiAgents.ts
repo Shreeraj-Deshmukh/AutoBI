@@ -15,12 +15,64 @@ import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
  * data mapping and testing stay grounded in the actual data.
  */
 
+/**
+ * What an agent is told about the engagement so far. Every agent receives the same picture — the client and
+ * audience, the requirements agreed, what the data is and the recent conversation — so each step continues
+ * from the previous ones instead of starting cold.
+ */
+export interface AgentContext {
+  info?: ProjectInfo;
+  requirements?: RequirementSpec | null;
+  understanding?: DataUnderstanding | null;
+  /** Recent conversation turns with this agent, oldest first. */
+  history?: { role: 'user' | 'agent'; text: string }[];
+}
+
+/** The standard every agent works to. */
+const STANDARD = `Work to the standard of a senior BI consultant delivering to a client. Be precise and business-first. Never invent: use only the names, columns and values you are given. Where information is missing, make the most sensible assumption and state it instead of guessing silently. Stay consistent with what earlier steps of this project already decided (names, definitions, rules).`;
+
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+
+/** Text block describing the engagement for a prompt; `parts` picks what this agent needs. */
+export function projectBrief(ctx: AgentContext | undefined, parts: ('engagement' | 'requirements' | 'data' | 'history')[]): string {
+  if (!ctx) return '';
+  const out: string[] = [];
+  const i = ctx.info;
+  if (parts.includes('engagement') && i) {
+    out.push(`ENGAGEMENT\nProject: ${i.name}\nClient / business unit: ${i.client || '(not given)'}\nDomain: ${i.domain || '(not given)'}\nAudience: ${i.audience || '(not given)'}\nReporting frequency: ${i.frequency || '(not given)'}${i.period ? `\nDefault period: ${i.period}` : ''}${i.objective ? `\nObjective: ${i.objective}` : ''}${i.keyQuestions?.length ? `\nKey questions: ${i.keyQuestions.join('; ')}` : ''}`);
+  }
+  const r = ctx.requirements;
+  if (parts.includes('requirements') && r) {
+    const list = (label: string, xs: ReqItem[] | undefined, max = 30) => (xs?.length ? `\n${label}: ${xs.slice(0, max).map((x) => x.text).join('; ')}` : '');
+    out.push(`AGREED REQUIREMENTS${list('Objectives', r.objectives, 10)}${list('KPIs', r.kpis)}${list('Breakdowns', r.dimensions)}${list('Filters', r.filters)}${list('Business rules', r.rules)}${list('Pages', r.pages, 8)}\nTime grain: ${r.timeGrain ?? 'not decided'}; period-over-period comparison: ${r.comparison ? 'yes' : 'no'}`);
+  }
+  const u = ctx.understanding;
+  if (parts.includes('data') && u) {
+    const label = (id: string) => u.profiles.find((p) => p.datasetId === id)?.label ?? id;
+    const tables = u.profiles.map((p) => `- ${p.label} (${p.kind}, ${p.rowCount} rows; ${p.primaryKey ? `one row per ${p.entity.toLowerCase()}, key ${p.primaryKey}` : p.recordKey ? `several lines per ${p.entity.toLowerCase()}, ${p.recordKey} repeats` : 'no unique key'}${p.dateField ? `; event date ${p.dateField}` : ''})`);
+    const links = u.relationships.filter((x) => x.status !== 'rejected').map((x) => `${label(x.fromDataset)}.${x.fromField} → ${label(x.toDataset)}.${x.toField}`);
+    const issues = u.issues.filter((x) => x.severity !== 'info' && !x.resolved).slice(0, 6).map((x) => x.message);
+    out.push(`DATA\n${tables.join('\n')}${links.length ? `\nLinks (many → one): ${links.join('; ')}` : ''}${issues.length ? `\nKnown data-quality issues: ${issues.join(' | ')}` : ''}`);
+  }
+  if (parts.includes('history') && ctx.history?.length) {
+    out.push(`RECENT CONVERSATION (oldest first)\n${ctx.history.slice(-8).map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${clip(m.text.replace(/\s+/g, ' '), 320)}`).join('\n')}`);
+  }
+  return out.length ? `${out.join('\n\n')}\n\n` : '';
+}
+
 const LISTS: RequirementSection[] = ['objectives', 'stories', 'kpis', 'dimensions', 'filters', 'pages', 'visuals', 'datasets', 'rules'];
 const strs = (v: unknown, max = 15): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).map((x: string) => x.trim()).slice(0, max) : []);
 const items = (v: unknown, source: ReqItem['source'] = 'extracted'): ReqItem[] => strs(v).map((text) => ({ id: uid('req'), text, source }));
 
 const REQ_RULES = `You are the Requirement Intelligence Agent of a BI delivery platform. Extract a reporting dashboard specification.
+${STANDARD}
 Rules:
+- Capture EVERY metric the brief names — totals, averages, rates and percentages, ratios such as "per order" or "vs target", durations — one KPI each; do not merge or drop any. Do not add metrics the brief does not ask for.
+- A ranking ("top 10 customers by net sales") is a visual, not a breakdown: put it in "visuals", keep the entity ("Customer") in "dimensions" and the metric in "kpis".
+- Inclusions, exclusions and formulas stated in the brief ("exclude cancelled orders", "margin = net sales − cost") go into "rules" in the user's words; add the formula for every rate or ratio KPI.
+- "objectives" state the business outcome (what decision the dashboard supports), not the feature.
+- Write one or two "stories" for each audience named in the brief or project details.
+- Do not ask about anything the brief or the project details already answer.
 - "stories": 4–8 user stories in the form "As a <persona>, I want to <need> so that <benefit>".
 - "kpis": short metric names that name the business state they count (e.g. "Total patients", "Patients awaiting PA", "PA approval rate", "Average time to therapy initiation"). Express requested breakdowns as "<Metric> by <dimension>" (e.g. "Unresolved access cases by HCP").
 - "dimensions": business attributes to slice by (e.g. "Region", "Account tier").
@@ -69,7 +121,7 @@ const FRM_REQ_RULES = `This is a Field Reimbursement Manager (FRM) / case-manage
 export async function aiExtractRequirements(narrative: string, info: ProjectInfo, base: RequirementSpec): Promise<RequirementSpec> {
   const brief = `Project: ${info.name}\nDomain: ${info.domain}\nObjective: ${info.objective}\nAudience: ${info.audience || '(not given)'}\nFrequency: ${info.frequency || '(not given)'}\nPeriod: ${info.period || '(not given)'}\nKey questions: ${info.keyQuestions.join('; ') || '(none)'}`;
   const frm = isFrmCaseBrief(narrative);
-  const j = await chatJSON<ReqJson>(`${REQ_RULES}${frm ? `\n${FRM_REQ_RULES}` : ''}\nReturn JSON with exactly these keys: ${SCHEMA}`, `${brief}\n\nRequirement:\n${narrative}`);
+  const j = await chatJSON<ReqJson>(`${REQ_RULES}${frm ? `\n${FRM_REQ_RULES}` : ''}\nReturn JSON with exactly these keys: ${SCHEMA}`, `${brief}\nClient / business unit: ${info.client || '(not given)'}\n\nRequirement:\n${narrative}`, { maxTokens: 3500 });
   const spec = toSpec(j, base);
   if (!spec.kpis.length) throw new Error('AI returned no KPIs');
   if (frm) {
@@ -81,12 +133,13 @@ export async function aiExtractRequirements(narrative: string, info: ProjectInfo
   return spec;
 }
 
-export async function aiRespond(spec: RequirementSpec, message: string, info: ProjectInfo): Promise<{ spec: RequirementSpec; reply: string; infoPatch?: Partial<ProjectInfo> }> {
+export async function aiRespond(spec: RequirementSpec, message: string, info: ProjectInfo, ctx?: AgentContext): Promise<{ spec: RequirementSpec; reply: string; infoPatch?: Partial<ProjectInfo> }> {
   const current = Object.fromEntries(LISTS.map((k) => [k, spec[k].map((x) => x.text)]));
   const open = spec.ambiguities.filter((a) => !a.answer).map((a) => ({ id: a.id, question: a.question, options: a.options }));
   const j = await chatJSON<ReqJson & { reply?: string; answers?: { id?: string; answer?: string }[]; audience?: string }>(
-    `${REQ_RULES}\nYou are in a conversation refining an existing specification. Apply the user's message: answer open questions, add/remove/rename items as asked. Return JSON: {"reply": "<one or two sentences to the user>", "answers": [{"id": "<open question id>", "answer": "<answer>"}], "audience": "<if stated, else empty>", "timeGrain": ..., "comparison": ..., and ONLY the lists that changed, each as the COMPLETE new list (e.g. "filters": [...])}`,
-    `Current specification: ${JSON.stringify(current)}\nOpen questions: ${JSON.stringify(open)}\nAudience: ${info.audience || '(unknown)'}\n\nUser message: ${message}`,
+    `${REQ_RULES}\nYou are in a conversation refining an existing specification. Apply the user's message: answer open questions, add/remove/rename items as asked. Read the recent conversation to resolve references such as "that one", "the last KPI" or "same for region". Change only what the message asks for and keep every other item exactly as it is. In "reply", say precisely what you changed (name the items). Return JSON: {"reply": "<one or two sentences to the user>", "answers": [{"id": "<open question id>", "answer": "<answer>"}], "audience": "<if stated, else empty>", "timeGrain": ..., "comparison": ..., and ONLY the lists that changed, each as the COMPLETE new list (e.g. "filters": [...])}`,
+    `${projectBrief({ ...ctx, info }, ['engagement', 'data', 'history'])}Current specification: ${JSON.stringify(current)}\nOpen questions: ${JSON.stringify(open)}\nAudience: ${info.audience || '(unknown)'}\n\nUser message: ${message}`,
+    { maxTokens: 3500 },
   );
   const next: RequirementSpec = { ...spec, ambiguities: spec.ambiguities.map((a) => ({ ...a })) };
   for (const k of LISTS) {
@@ -106,12 +159,12 @@ export async function aiRespond(spec: RequirementSpec, message: string, info: Pr
 }
 
 /** Business descriptions for datasets and columns. Only metadata and a few example values are sent, never full rows. */
-export async function aiDescribeData(u: DataUnderstanding, domain: string): Promise<DataUnderstanding> {
-  const summary = u.profiles.map((p) => ({ id: p.datasetId, name: p.label, kind: p.kind, rows: p.rowCount, primaryKey: p.primaryKey, columns: p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role, distinct: c.distinct, examples: c.topValues.slice(0, 3).map((v) => v.value) })) }));
+export async function aiDescribeData(u: DataUnderstanding, domain: string, ctx?: AgentContext): Promise<DataUnderstanding> {
+  const summary = u.profiles.map((p) => ({ id: p.datasetId, name: p.label, kind: p.kind, rows: p.rowCount, primaryKey: p.primaryKey, ...(p.recordKey ? { repeatingRecordId: p.recordKey } : {}), eventDate: p.dateField, columns: p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role, distinct: c.distinct, examples: c.topValues.slice(0, 3).map((v) => v.value) })) }));
   const rels = u.relationships.map((r) => `${u.profiles.find((p) => p.datasetId === r.fromDataset)?.label}.${r.fromField} → ${u.profiles.find((p) => p.datasetId === r.toDataset)?.label}.${r.toField}`);
   const j = await chatJSON<{ datasets?: { id?: string; description?: string }[]; columns?: { datasetId?: string; name?: string; definition?: string }[] }>(
-    'You are the Data Intelligence Agent. Given profiled dataset metadata, explain in business language what each dataset represents (1–2 sentences, mention its grain and how it relates to the others) and give a short business definition (max 15 words) for every column. Return {"datasets":[{"id","description"}],"columns":[{"datasetId","name","definition"}]}.',
-    `Domain: ${domain || 'unknown'}\nRelationships: ${rels.join('; ') || 'none'}\nDatasets: ${JSON.stringify(summary)}`,
+    `You are the Data Intelligence Agent. ${STANDARD}\nGiven profiled dataset metadata, explain in business language what each dataset represents (1–2 sentences: what one row is — its grain — and how it relates to the other datasets and to the dashboard's KPIs) and give a short business definition (max 15 words) for every column, in the vocabulary of the client's domain. Say what a column means to the business, not its data type. Return {"datasets":[{"id","description"}],"columns":[{"datasetId","name","definition"}]}.`,
+    `${projectBrief(ctx, ['engagement', 'requirements'])}Domain: ${domain || 'unknown'}\nRelationships: ${rels.join('; ') || 'none'}\nDatasets: ${JSON.stringify(summary)}`,
     { maxTokens: 3500 },
   );
   const next: DataUnderstanding = JSON.parse(JSON.stringify(u));
@@ -143,7 +196,7 @@ const DESIGN_COMMANDS = [
 ];
 
 /** Translate a free-form design request into canonical edit commands, then apply them deterministically. */
-export async function aiDesignEdit(spec: DashboardSpec, request: string, ctx: { u: DataUnderstanding; f: Foundation; activePageId?: string }) {
+export async function aiDesignEdit(spec: DashboardSpec, request: string, ctx: { u: DataUnderstanding; f: Foundation; activePageId?: string }, project?: AgentContext) {
   // plain filter requests ("Add a payer filter", "Add a time period filter", "Remove the market filter") are applied
   // directly, so they behave exactly the same with or without a model
   if (/^\s*(?:please\s+)?(?:add|remove|delete|drop)\s+(?:an?\s+|the\s+)?[\w\s,&/-]+?\s+(?:filters?|slicers?)\s*[.!]?\s*$/i.test(request)) {
@@ -153,8 +206,8 @@ export async function aiDesignEdit(spec: DashboardSpec, request: string, ctx: { 
   const visuals = spec.pages.map((p) => `${p.name}: ${p.components.map((c) => `"${c.title}" (${c.type})`).join(', ')}`);
   const fields = ctx.u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => c.name));
   const j = await chatJSON<{ commands?: unknown }>(
-    `You are the Dashboard Design Agent. Translate the user's request into a list of edit commands using ONLY these forms:\n${DESIGN_COMMANDS.join('\n')}\nUse exact visual titles, page names, measure names and field names from the context. Return {"commands": ["..."]}. Return an empty list if the request cannot be done with the available data.`,
-    `Pages and visuals:\n${visuals.join('\n')}\nFilters: ${spec.filters.map((f) => f.label).join(', ')}\nMeasures: ${ctx.f.measures.map((m) => m.name).join(', ')}\nFields: ${[...new Set(fields)].join(', ')}\nCurrent page: ${spec.pages.find((p) => p.id === ctx.activePageId)?.name ?? spec.pages[0]?.name}\n\nRequest: ${request}`,
+    `You are the Dashboard Design Agent. Translate the user's request into a list of edit commands using ONLY these forms:\n${DESIGN_COMMANDS.join('\n')}\nUse exact visual titles, page names, measure names and field names from the context. Read the recent conversation to resolve references ("it", "that chart", "the one you just added", "do the same for region"). A request may need several commands; keep them in the order they should be applied. Return {"commands": ["..."]}. Return an empty list if the request cannot be done with the available data.`,
+    `${projectBrief(project, ['engagement', 'history'])}Pages and visuals:\n${visuals.join('\n')}\nFilters: ${spec.filters.map((f) => f.label).join(', ')}\nMeasures: ${ctx.f.measures.map((m) => m.name).join(', ')}\nFields: ${[...new Set(fields)].join(', ')}\nCurrent page: ${spec.pages.find((p) => p.id === ctx.activePageId)?.name ?? spec.pages[0]?.name}\n\nRequest: ${request}`,
   );
   const commands = strs(j.commands, 8);
   let cur = spec;
@@ -173,7 +226,7 @@ export async function aiDesignEdit(spec: DashboardSpec, request: string, ctx: { 
 
 export async function aiExecutiveSummary(facts: Record<string, unknown>): Promise<string> {
   const j = await chatJSON<{ summary?: string }>(
-    'You are the Documentation Agent. Write a concise executive summary (120–180 words, plain prose, no headings) of this reporting project for business stakeholders, using only the facts given. Return {"summary": "..."}.',
+    `You are the Documentation Agent. ${STANDARD}\nWrite a concise executive summary (120–180 words, plain prose, no headings) of this reporting project for business stakeholders, using only the facts given: what the dashboard is for and who uses it, what it measures and from which data, what testing showed (state failures and open defects plainly, with numbers), and what remains before release. Return {"summary": "..."}.`,
     JSON.stringify(facts),
     { maxTokens: 800 },
   );
@@ -199,19 +252,25 @@ interface MeasureJson {
 }
 
 function dataContext(u: DataUnderstanding) {
-  return u.profiles.map((p) => ({ dataset: p.datasetId, label: p.label, kind: p.kind, rows: p.rowCount, primaryKey: p.primaryKey, uniqueKeys: p.columns.find((c) => c.name === p.primaryKey)?.distinct, columns: p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role, ...(c.distinct <= 15 && c.type !== 'date' ? { values: c.topValues.map((v) => v.value) } : {}) })) }));
+  return u.profiles.map((p) => ({ dataset: p.datasetId, label: p.label, kind: p.kind, rows: p.rowCount, primaryKey: p.primaryKey, ...(p.recordKey ? { repeatingRecordId: p.recordKey, note: `rows are lines: count ${p.entity.toLowerCase()}s with countDistinct on ${p.recordKey}` } : {}), eventDate: p.dateField, uniqueKeys: p.columns.find((c) => c.name === p.primaryKey)?.distinct, columns: p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role, ...(c.distinct <= 15 && c.type !== 'date' ? { values: c.topValues.map((v) => v.value) } : {}) })) }));
 }
 
 const MEASURE_RULES = `Measures use: aggregation count | countDistinct | sum | avg | median | ratio. "dataset" is a dataset id, "field" a column of it.
 "conditions" filter rows (all must hold): op eq | neq (values = exact column values from the data) | gt | gte | lt | lte (values = [number]) | notnull.
 A ratio uses "numerator" and "denominator" = names of other measures (existing or in your list) and format "percent".
-Count people/patients with countDistinct on their ID if the ID repeats. Durations use avg. Never invent columns or values.`;
+Count people/patients with countDistinct on their ID if the ID repeats. Durations use avg. Never invent columns or values.
+Grain: when a dataset has a "repeatingRecordId" its rows are lines of a record — count the records with countDistinct on that id, never with count.
+Additivity: sum only amounts and volumes. Prices, percentages, rates and scores are never summed — use avg, or a ratio of two sums (e.g. discount % = discount amount ÷ gross amount).
+Business rules are binding: an exclusion ("exclude cancelled orders") becomes a neq condition on every amount it applies to; a stated formula is implemented as written.
+A rate is a ratio whose numerator is a subset of its denominator's population; say in "description" what the denominator is.
+"description" is one plain sentence a business user can check ("Net sales of delivered and shipped orders, excluding cancellations").
+If a KPI cannot be computed from the data (e.g. it needs a subtraction of two columns or a column that is not there), leave it out instead of approximating it.`;
 
 /** Validate AI measure JSON against the data; returns measures or throws when nothing usable came back. */
 export function materializeMeasures(items: MeasureJson[], u: DataUnderstanding, existing: MeasureDef[]): { measures: MeasureDef[]; rejected: string[] } {
   const out: MeasureDef[] = [];
   const rejected: string[] = [];
-  const byName = (n?: string) => [...existing, ...out].find((m) => m.name.toLowerCase() === String(n ?? '').toLowerCase());
+  const byName = (n?: unknown) => [...existing, ...out].find((m) => m.name.toLowerCase() === String(nameOf(n) ?? '').toLowerCase());
   const pending: MeasureJson[] = [];
   for (const it of items) {
     const name = String(it.name ?? '').trim();
@@ -250,11 +309,11 @@ export function materializeMeasures(items: MeasureJson[], u: DataUnderstanding, 
   return { measures: out, rejected };
 }
 
-export async function aiProposeMeasures(spec: RequirementSpec | null, u: DataUnderstanding, existing: MeasureDef[]) {
+export async function aiProposeMeasures(spec: RequirementSpec | null, u: DataUnderstanding, existing: MeasureDef[], ctx?: AgentContext) {
   const j = await chatJSON<{ measures?: MeasureJson[] }>(
-    `You are the Reporting Foundation Agent. Define the KPI measures needed for the requirements, grounded only in the datasets given.\n${MEASURE_RULES}\nReturn {"measures":[{"name","description","aggregation","dataset","field","conditions","numerator","denominator","format","requirement"}]} — one entry per requirement KPI (plus any numerator/denominator a ratio needs). Use the requirement's wording for "name" and copy the KPI text into "requirement".`,
-    `Requirement KPIs: ${JSON.stringify(spec?.kpis.map((k) => k.text) ?? [])}\nBusiness rules: ${JSON.stringify(spec?.rules.map((k) => k.text) ?? [])}\nExisting measures (already defined, several from the ProcDNA KPI Catalogue — do not redefine them): ${JSON.stringify(existing.map((m) => (m.catalogueRef ? `${m.name} [catalogue: ${m.catalogueRef}]` : m.name)))}\nDatasets: ${JSON.stringify(dataContext(u))}`,
-    { maxTokens: 3500 },
+    `You are the Reporting Foundation Agent. ${STANDARD}\nDefine the KPI measures needed for the requirements, grounded only in the datasets given.\n${MEASURE_RULES}\nReturn {"measures":[{"name","description","aggregation","dataset","field","conditions","numerator","denominator","format","requirement"}]} — one entry per requirement KPI (plus any numerator/denominator a ratio needs). Use the requirement's wording for "name" and copy the KPI text into "requirement".`,
+    `${projectBrief({ ...ctx, understanding: u }, ['engagement', 'data'])}Requirement KPIs: ${JSON.stringify(spec?.kpis.map((k) => k.text) ?? [])}\nBusiness rules: ${JSON.stringify(spec?.rules.map((k) => k.text) ?? [])}\nObjectives: ${JSON.stringify(spec?.objectives.map((k) => k.text) ?? [])}\nExisting measures (already defined, several from the ProcDNA KPI Catalogue — do not redefine them; reuse them as numerator / denominator): ${JSON.stringify(existing.map((m) => (m.catalogueRef ? `${m.name} [catalogue: ${m.catalogueRef}]` : `${m.name} = ${m.logic}`)))}\nDatasets: ${JSON.stringify(dataContext(u))}`,
+    { maxTokens: 4500 },
   );
   const res = materializeMeasures(j.measures ?? [], u, existing);
   if (!res.measures.length) throw new Error(`AI proposed no usable measures${res.rejected.length ? ` (${res.rejected.slice(0, 3).join('; ')})` : ''}`);
@@ -262,10 +321,11 @@ export async function aiProposeMeasures(spec: RequirementSpec | null, u: DataUnd
 }
 
 /** One KPI from a natural-language description (live change requests). */
-export async function aiDefineMeasure(text: string, u: DataUnderstanding, existing: MeasureDef[]) {
+export async function aiDefineMeasure(text: string, u: DataUnderstanding, existing: MeasureDef[], ctx?: AgentContext) {
   const j = await chatJSON<{ measures?: MeasureJson[] }>(
-    `You are the Reporting Foundation Agent. Define the single KPI the user describes (plus a numerator/denominator only if it is a ratio).\n${MEASURE_RULES}\nReturn {"measures":[...]} with the requested KPI LAST.`,
-    `KPI request: ${text}\nExisting measures: ${JSON.stringify(existing.map((m) => m.name))}\nDatasets: ${JSON.stringify(dataContext(u))}`,
+    `You are the Reporting Foundation Agent. ${STANDARD}\nDefine the single KPI the user describes (plus a numerator/denominator only if it is a ratio). Follow the project's business rules and the conventions of the measures already defined (same naming style, same way of counting records).\n${MEASURE_RULES}\nReturn {"measures":[...]} with the requested KPI LAST.`,
+    `${projectBrief({ ...ctx, understanding: u }, ['engagement', 'data'])}Business rules: ${JSON.stringify(ctx?.requirements?.rules.map((k) => k.text) ?? [])}\nKPI request: ${text}\nExisting measures: ${JSON.stringify(existing.map((m) => `${m.name} = ${m.logic}`))}\nDatasets: ${JSON.stringify(dataContext(u))}`,
+    { maxTokens: 3000 },
   );
   const res = materializeMeasures(j.measures ?? [], u, existing);
   if (!res.measures.length) throw new Error(res.rejected[0] ?? 'AI returned no measure');
@@ -275,28 +335,46 @@ export async function aiDefineMeasure(text: string, u: DataUnderstanding, existi
 }
 
 // ───────────────────────── Dashboard design ─────────────────────────
-interface CompJson { type?: string; title?: string; measures?: string[]; dimension?: string; series?: string; width?: number; topN?: number; threshold?: number; description?: string }
+interface CompJson { type?: string; title?: string; measures?: unknown; dimension?: unknown; series?: unknown; width?: number; topN?: number; threshold?: number; description?: string }
+
+/** A name from a model reply as text: models sometimes send ["Region"] or {"column": "Region"} where a string is expected. */
+function nameOf(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  if (typeof v === 'string') return v.trim() || undefined;
+  if (typeof v === 'number') return String(v);
+  if (Array.isArray(v)) return nameOf(v[0]);
+  if (typeof v === 'object') { const o = v as Record<string, unknown>; return nameOf(o.column ?? o.name ?? o.field ?? o.label ?? o.title); }
+  return undefined;
+}
+const namesOf = (v: unknown): string[] => (Array.isArray(v) ? v : v == null ? [] : [v]).map(nameOf).filter((x): x is string => !!x);
 
 /** Measure kinds whose values can be added up across the segments of a stacked chart. */
 const STACKABLE: MeasureDef['kind'][] = ['count', 'countDistinct', 'sum'];
 
-export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spec: RequirementSpec | null, fallback: DashboardSpec): Promise<DashboardSpec> {
+export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spec: RequirementSpec | null, fallback: DashboardSpec, ctx?: AgentContext): Promise<DashboardSpec> {
   const u = { ...u0, profiles: visibleProfiles(u0.profiles, f) };
   const fields = u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => ({ column: c.name, label: fieldLabel(f, fref(p.datasetId, c.name)), dataset: p.label })));
   // pages from the ProcDNA FRM report template are laid out deterministically; the model designs the rest
   const templated = fallback.pages.filter((p) => p.template);
   const templateNote = templated.length ? `\nThese pages are already built from the ProcDNA FRM report template — do NOT repeat them or their content; design 1–2 additional pages only (e.g. the patient access funnel and barriers): ${templated.map((p) => `"${p.name}" (${p.components.map((c) => c.title).join(', ')})`).join('; ')}.` : '';
-  const j = await chatJSON<{ pages?: { name?: string; description?: string; sections?: { name?: string; components?: CompJson[] }[] }[]; filters?: string[] }>(
-    `You are the Dashboard Design Agent. Design a Power BI-style dashboard for the requirements using ONLY the measures and fields listed.${templateNote}
+  const j = await chatJSON<{ pages?: { name?: unknown; description?: unknown; sections?: { name?: unknown; components?: CompJson[] }[] }[]; filters?: unknown }>(
+    `You are the Dashboard Design Agent. ${STANDARD}\nDesign a Power BI-style dashboard for the requirements using ONLY the measures and fields listed.${templateNote}
+Design for the audience named in the engagement: each page answers one business question and reads top to bottom — headline KPIs, then what drives them (trend and breakdowns), then the detail people act on (rankings, tables).
+Every requirement KPI appears at least once, the most important ones as KPI cards on the first page. Do not show the same measure by the same dimension twice.
+Chart choice: change over time → line; ranking or long list → hbar with topN 10; comparison across a few categories → bar; part of a whole with at most 6 categories → donut; many attributes per item → table.
+A measure can only be broken down by a field of its own dataset or of a dataset its data links to (see Links); a ratio across two datasets (e.g. actual vs target) only by fields both sides link to.
+"dimension" and "series" are each ONE column name as a plain string (never a list or an object); "measures" is a list of measure-name strings.
+Titles are short business phrases ("Net Sales by Region", "Top 10 Customers by Net Sales"); "description" is one sentence on what the reader should take from the visual.
 Component types: kpi (one measure), funnel (2–6 count measures in stage order), bar, hbar (needs dimension; use topN 10 for long lists), donut (≤6 categories), line (time trend, 1–3 measures), table (dimension + measures; "threshold" keeps rows whose first measure is greater than it), stacked (dimension + series; only for count or sum measures — rates, ratios and averages cannot be stacked, use bar for them).
 Width is out of 12. Group components into named sections in reading order (headline first, then drivers, then action lists). Prefer one or two focused pages over many; at most 6 KPI cards per page and at most 6 filters.
 Return {"pages":[{"name","description","sections":[{"name","components":[{"type","title","measures":[measure names],"dimension":"column","series":"column","width","topN","threshold","description"}]}]}],"filters":["column", ...]}`,
-    `Requirements: ${JSON.stringify({ objectives: spec?.objectives.map((x) => x.text), stories: spec?.stories?.map((x) => x.text), kpis: spec?.kpis.map((x) => x.text), filters: spec?.filters.map((x) => x.text), pages: spec?.pages.map((x) => x.text) })}\nMeasures: ${JSON.stringify(f.measures.map((m) => ({ name: m.name, logic: m.logic })))}\nFields: ${JSON.stringify(fields)}`,
-    { maxTokens: 4000 },
+    `${projectBrief({ ...ctx, understanding: u }, ['engagement', 'data'])}Requirements: ${JSON.stringify({ objectives: spec?.objectives.map((x) => x.text), stories: spec?.stories?.map((x) => x.text), kpis: spec?.kpis.map((x) => x.text), breakdowns: spec?.dimensions.map((x) => x.text), filters: spec?.filters.map((x) => x.text), pages: spec?.pages.map((x) => x.text), visuals: spec?.visuals.map((x) => x.text), rules: spec?.rules.map((x) => x.text) })}\nMeasures: ${JSON.stringify(f.measures.map((m) => ({ name: m.name, logic: m.logic, ...(m.requirementRef ? { requirement: m.requirementRef } : {}) })))}\nFields: ${JSON.stringify(fields)}`,
+    { maxTokens: 5000 },
   );
   const mByName = (n: string) => f.measures.find((m) => m.name.toLowerCase() === n.toLowerCase());
   const dsOf = (m: MeasureDef): string | undefined => m.datasetId ?? (m.numeratorId ? dsOf(f.measures.find((x) => x.id === m.numeratorId)!) : undefined);
-  const fieldRef = (name: string | undefined, fromDs?: string) => {
+  const fieldRef = (raw: unknown, fromDs?: string) => {
+    const name = nameOf(raw);
     if (!name) return undefined;
     const cands = u.profiles.flatMap((p) => p.columns.filter((c) => c.name.toLowerCase() === name.toLowerCase() || fieldLabel(f, fref(p.datasetId, c.name)).toLowerCase() === name.toLowerCase()).map((c) => fref(p.datasetId, c.name)));
     return cands.find((r) => !fromDs || reachable(u.relationships, fromDs, r.split('::')[0])) ;
@@ -304,12 +382,13 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
   const TYPES: ComponentType[] = ['kpi', 'funnel', 'bar', 'hbar', 'donut', 'line', 'area', 'table', 'stacked'];
   const pages: DashPage[] = [];
   let valid = 0;
-  for (const pg of j.pages ?? []) {
+  for (const pg of Array.isArray(j.pages) ? j.pages : []) {
     const comps: DashComponent[] = [];
-    for (const sec of pg.sections ?? []) {
-      for (const c of sec.components ?? []) {
+    for (const sec of Array.isArray(pg?.sections) ? pg.sections : []) {
+      for (const c of Array.isArray(sec?.components) ? sec.components : []) {
+        if (!c || typeof c !== 'object') continue;
         let type = String(c.type) as ComponentType;
-        const ms = (c.measures ?? []).map((n) => mByName(String(n))).filter((m): m is MeasureDef => !!m);
+        const ms = namesOf(c.measures).map((n) => mByName(n)).filter((m): m is MeasureDef => !!m);
         if (!TYPES.includes(type) || !ms.length) continue;
         const ds = dsOf(ms[0]);
         const dim = fieldRef(c.dimension, ds);
@@ -322,12 +401,12 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
           series = undefined;
         }
         const width = ([3, 4, 6, 8, 12].includes(Number(c.width)) ? Number(c.width) : type === 'kpi' ? 3 : type === 'table' || type === 'funnel' || type === 'line' ? 12 : 6) as DashComponent['width'];
-        comps.push({ id: uid('cmp'), type, title: String(c.title ?? ms[0].name), description: String(c.description ?? ''), measureIds: type === 'kpi' || ['bar', 'hbar', 'donut', 'stacked', 'table'].includes(type) && type !== 'table' ? [ms[0].id] : ms.map((m) => m.id), dimension: dim, series, timeGrain: type === 'line' || type === 'area' ? fallback.timeGrain : undefined, comparison: type === 'kpi' ? true : undefined, width, topN: c.topN ? Number(c.topN) : undefined, threshold: c.threshold != null && !Number.isNaN(Number(c.threshold)) ? { op: 'gt', value: Number(c.threshold) } : undefined, section: sec.name ? String(sec.name) : undefined, tableColumns: type === 'table' ? [] : undefined });
+        comps.push({ id: uid('cmp'), type, title: nameOf(c.title) ?? ms[0].name, description: nameOf(c.description) ?? '', measureIds: type === 'kpi' || ['bar', 'hbar', 'donut', 'stacked', 'table'].includes(type) && type !== 'table' ? [ms[0].id] : ms.map((m) => m.id), dimension: dim, series, timeGrain: type === 'line' || type === 'area' ? fallback.timeGrain : undefined, comparison: type === 'kpi' ? true : undefined, width, topN: c.topN ? Number(c.topN) : undefined, threshold: c.threshold != null && !Number.isNaN(Number(c.threshold)) ? { op: 'gt', value: Number(c.threshold) } : undefined, section: nameOf(sec.name), tableColumns: type === 'table' ? [] : undefined });
         valid++;
       }
     }
-    const name = String(pg.name ?? `Page ${pages.length + 1}`);
-    if (comps.length && !templated.some((t) => t.name.toLowerCase() === name.toLowerCase())) pages.push({ id: uid('pg'), name, description: String(pg.description ?? ''), components: comps });
+    const name = nameOf(pg.name) ?? `Page ${pages.length + 1}`;
+    if (comps.length && !templated.some((t) => t.name.toLowerCase() === name.toLowerCase())) pages.push({ id: uid('pg'), name, description: nameOf(pg.description) ?? '', components: comps });
   }
   if (valid < (templated.length ? 2 : 4)) throw new Error(`AI design had only ${valid} component(s) that match the model`);
   pages.unshift(...templated);
@@ -335,8 +414,8 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
   // FEATURES.frmHeldBackFilters): keep the template's filters exactly, the model adds none
   if (templated.length) return { ...fallback, pages, filters: fallback.filters };
   const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }];
-  for (const name of (j.filters ?? []).slice(0, 6)) {
-    const r = fieldRef(String(name));
+  for (const name of namesOf(j.filters).slice(0, 6)) {
+    const r = fieldRef(name);
     if (r && filters.length < (templated.length ? 9 : 7) && !filters.some((x) => x.field === r)) filters.push({ id: uid('flt'), label: fieldLabel(f, r), type: 'multi', field: r });
   }
   for (const x of fallback.filters) if (x.type === 'multi' && !filters.some((y) => y.field === x.field) && filters.length < 3) filters.push(x);

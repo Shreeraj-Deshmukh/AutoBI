@@ -3,6 +3,7 @@ import type { AgentId, AgentRun, AgentStep, Project } from '@/types';
 import { agentMeta } from '@/agents/registry';
 import { cx, Badge } from './ui';
 import { fmtDateTime } from '@/lib/util';
+import { engineDisplay, useAI } from '@/agents/llm';
 import type { ReactNode } from 'react';
 
 export function StepIcon({ s }: { s: AgentStep['status'] }) {
@@ -20,6 +21,7 @@ export function RunStatus({ r }: { r: AgentRun }) {
 }
 
 export function RunView({ r, compact }: { r: AgentRun; compact?: boolean }) {
+  useAI((s) => s.model); // re-render when the AI connection is known
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -52,7 +54,7 @@ export function RunView({ r, compact }: { r: AgentRun; compact?: boolean }) {
           <span key={x} className="rounded bg-brand-50 px-1.5 py-0.5 text-brand-700">{x}</span>
         ))}
       </div>
-      <div className="text-[0.625rem] text-slate-400">Engine: {r.engine}</div>
+      {engineDisplay(r.engine) && <div className="text-[0.625rem] text-slate-400">Engine: {engineDisplay(r.engine)}</div>}
     </div>
   );
 }
@@ -88,7 +90,7 @@ export function AgentProgress({ p, agent }: { p: Project; agent: AgentId }) {
         <Bot className="h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.8125rem] font-semibold">{meta.name}</div>
-          <div className="truncate text-[0.6875rem] text-blue-100/80">{run.engine}</div>
+          <div className="truncate text-[0.6875rem] text-blue-100/80">{engineDisplay(run.engine)}</div>
         </div>
         <RunStatus r={run} />
       </div>
@@ -116,7 +118,7 @@ export default function AgentPanel({ p, agent, next, children }: { p: Project; a
         <div className="min-w-0 flex-1">
           <div className="truncate text-[0.8125rem] font-semibold">{meta.name}</div>
           <div className="truncate text-[0.6875rem] text-brand-100/80">
-            {running ? <span className="flex items-center gap-1"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-300" />{latest.steps.find((s) => s.status === 'running')?.label ?? 'Working'}…</span> : latest ? latest.engine : 'Not yet run'}
+            {running ? <span className="flex items-center gap-1"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-300" />{latest.steps.find((s) => s.status === 'running')?.label ?? 'Working'}…</span> : latest ? engineDisplay(latest.engine) : 'Not yet run'}
           </div>
         </div>
         {latest && !running && <RunStatus r={latest} />}

@@ -30,7 +30,7 @@ import { getProject, mutate, useStore } from './store';
 import { engineFor } from './engineCache';
 import { agentMeta, STAGES } from '@/agents/registry';
 import { DETERMINISTIC, aiActive, engineLabel, withAI, type AIResult } from '@/agents/llm';
-import { aiDefineMeasure, aiDescribeData, aiDesignEdit, aiExecutiveSummary, aiExtractRequirements, aiGenerateDesign, aiProposeMeasures, aiRespond } from '@/agents/aiAgents';
+import { aiDefineMeasure, aiDescribeData, aiDesignEdit, aiExecutiveSummary, aiExtractRequirements, aiGenerateDesign, aiProposeMeasures, aiRespond, type AgentContext } from '@/agents/aiAgents';
 import { buildMeasureFromText } from '@/agents/kpiBuilder';
 import { applyClarification, extractRequirements, respondToMessage } from '@/agents/requirementAgent';
 import { mapRequirements, runDataIntelligence } from '@/agents/dataAgent';
@@ -113,7 +113,7 @@ const toast = (k: 'success' | 'error' | 'info', t: string) => useStore.getState(
 /** Record which engine actually produced an agent's output (AI or deterministic fallback). */
 function stamp(run: AgentRun, meta: { engine: string; aiError?: string }) {
   run.engine = meta.engine;
-  if (meta.aiError) run.warnings.push(`Azure AI Foundry call failed (${meta.aiError}); the deterministic engine was used instead.`);
+  if (meta.aiError) run.warnings.push(`Azure AI Foundry call failed (${meta.aiError}); the built-in engine was used instead.`);
 }
 
 // ───────────────────────────── gates ─────────────────────────────
@@ -143,6 +143,11 @@ export function progress(p: Project) {
 
 export function currentStage(p: Project): StageId {
   return ORDER.find((s) => !['approved', 'completed'].includes(p.stages[s].status)) ?? 'documentation';
+}
+
+/** What the AI agents are told about the project so far (see AgentContext): each step continues from the previous ones. */
+function agentContext(p: Project, history?: ChatMessage[]): AgentContext {
+  return { info: p.info, requirements: p.requirements, understanding: p.understanding, history: history?.slice(-8).map((m) => ({ role: m.role, text: m.text })) };
 }
 
 // ───────────────────────────── pacing ─────────────────────────────
@@ -315,7 +320,7 @@ export async function chat(pid: string, text: string) {
   });
   const cur = getProject(pid)!;
   const t0 = Date.now();
-  const res = await withAI(() => aiRespond(cur.requirements!, text, cur.info), () => respondToMessage(cur.requirements!, text, cur.info));
+  const res = await withAI(() => aiRespond(cur.requirements!, text, cur.info, agentContext(cur, cur.chat)), () => respondToMessage(cur.requirements!, text, cur.info));
   nextStep(pid, runId);
   await settle(t0);
   mutate(pid, (pp) => {
@@ -551,7 +556,7 @@ export async function runDataIntelligenceAgent(pid: string, opts: { refresh?: bo
     p0.requirements ? ['Requirements Specification', 'Uploaded datasets'] : ['Uploaded datasets'],
     async () => {
       const base = runDataIntelligence(datasets, getRows, p0.requirements);
-      dmeta = await withAI(() => aiDescribeData(base, p0.info.domain), () => base);
+      dmeta = await withAI(() => aiDescribeData(base, p0.info.domain, agentContext(p0)), () => base);
       return dmeta.value;
     },
     (p, u, run) => {
@@ -776,7 +781,7 @@ export async function runFoundationAgent(pid: string) {
       fmeta = await withAI(async () => {
         // the model defines the requirement KPIs; rules only fill gaps it left
         const generic = runFoundation(p0.understanding!, p0.requirements, { requirementKpis: false });
-        const r = await aiProposeMeasures(p0.requirements, p0.understanding!, generic.measures);
+        const r = await aiProposeMeasures(p0.requirements, p0.understanding!, generic.measures, agentContext(p0));
         aiRejected = r.rejected;
         return fillRequirementGaps({ ...generic, measures: [...generic.measures, ...r.measures] }, p0.understanding!, p0.requirements);
       }, () => runFoundation(p0.understanding!, p0.requirements));
@@ -808,7 +813,7 @@ export async function defineKpiFromText(pid: string, text: string) {
   mutate(pid, (p) => p.runs.unshift({ id: runId, agentId: 'foundation', startedAt: nowIso(), status: 'running', engine: engineLabel(), steps: [{ label: 'Interpreting KPI request', status: 'running' }, { label: 'Validating fields and values against the data', status: 'pending' }], inputs: ['KPI request'], outputs: [], warnings: [], errors: [] }));
   const t0 = Date.now();
   const res = await withAI(
-    () => aiDefineMeasure(text, p0.understanding!, p0.foundation!.measures),
+    () => aiDefineMeasure(text, p0.understanding!, p0.foundation!.measures, agentContext(p0)),
     () => {
       const b = buildMeasureFromText(text, p0.understanding!, p0.foundation!.measures);
       if (!b) throw new Error(`Couldn't work out "${text}" from the data. Name the status, value or numeric threshold (e.g. "patients with PA pending for more than 14 days").`);
@@ -841,7 +846,19 @@ export async function defineKpiFromText(pid: string, text: string) {
 function retestAutomated(p: Project, reason: string) {
   let n = 0;
   for (const c of p.testing?.cases ?? []) if (c.check && c.status !== 'Not Started' && c.status !== 'Requires Retesting') { c.status = 'Requires Retesting'; n++; }
-  if (n) log(p, 'Orchestrator', 'system', `${reason} — ${n} automated test(s) marked for re-run.`, 'testing');
+  if (n) log(p, 'Orchestrator', 'system', FEATURES.automatedTests ? `${reason} — ${n} automated test(s) marked for re-run.` : `${reason} — ${n} test(s) are being re-checked against the data.`, 'testing');
+  if (n) revalidateSoon(p.id);
+}
+
+/** Without a "Run automated tests" button, checks that need a re-run are executed on their own. */
+function revalidateSoon(pid: string) {
+  if (FEATURES.automatedTests) return;
+  setTimeout(() => {
+    const p = getProject(pid);
+    if (!p?.testing || !p.dashboard || isRunning(p, 'testing')) return;
+    const ids = p.testing.cases.filter((c) => c.check && c.status === 'Requires Retesting').map((c) => c.id);
+    if (ids.length) void executeTests(pid, ids);
+  }, 0);
 }
 
 function touchFoundation(p: Project, note: string, scope: 'logic' | 'structure' = 'structure') {
@@ -924,7 +941,7 @@ export async function runDesignAgent(pid: string) {
     ['Requirements Specification', 'Reporting Foundation'],
     async () => {
       const base = generateDesign(p0.understanding!, p0.foundation!, p0.requirements);
-      dmeta2 = await withAI(() => aiGenerateDesign(p0.understanding!, p0.foundation!, p0.requirements, base), () => base);
+      dmeta2 = await withAI(() => aiGenerateDesign(p0.understanding!, p0.foundation!, p0.requirements, base, agentContext(p0)), () => base);
       return dmeta2.value;
     },
     (p, spec, run) => {
@@ -973,7 +990,7 @@ export async function designCommand(pid: string, text: string, activePageId?: st
   });
   const ctx = { u: p.understanding, f: p.foundation, activePageId };
   const t0 = Date.now();
-  const res = await withAI(() => aiDesignEdit(p.design!.spec, text, ctx), () => applyDesignCommand(p.design!.spec, text, ctx));
+  const res = await withAI(() => aiDesignEdit(p.design!.spec, text, ctx, agentContext(p, p.designChat)), () => applyDesignCommand(p.design!.spec, text, ctx));
   nextStep(pid, runId);
   await settle(t0);
   mutate(pid, (pp) => {
@@ -1098,9 +1115,11 @@ export async function runTestingAgent(pid: string) {
       milestone(p, 'Testing Generated');
       const tech = cases.filter((c) => c.suite === 'technical').length;
       run.outputs.push('Test Case Library', 'Business QC Scenarios');
-      run.summary = `Generated ${cases.length} test cases: ${tech} technical and ${cases.length - tech} business QC scenarios (${cases.filter((c) => c.execution === 'Automated').length} automated, ${cases.filter((c) => c.execution === 'Manual').length} manual).`;
+      run.summary = FEATURES.automatedTests ? `Generated ${cases.length} test cases: ${tech} technical and ${cases.length - tech} business QC scenarios (${cases.filter((c) => c.execution === 'Automated').length} automated, ${cases.filter((c) => c.execution === 'Manual').length} manual).` : `Generated ${cases.length} test cases: ${tech} technical and ${cases.length - tech} business QC scenarios (${cases.filter((c) => c.execution === 'Manual').length} for analyst UAT).`;
     },
   );
+  // no separate "run" step: the generated cases are checked against the source data right away
+  if (!FEATURES.automatedTests && getProject(pid)?.testing) await executeTests(pid);
 }
 
 export async function executeTests(pid: string, ids?: string[]) {
@@ -1109,13 +1128,13 @@ export async function executeTests(pid: string, ids?: string[]) {
   const engine = engineFor(p0)!;
   const targets = p0.testing.cases.filter((c) => c.check && (!ids || ids.includes(c.id)));
   if (!targets.length) {
-    toast('info', 'No automated tests selected. Manual tests are executed by an analyst in the UAT tab.');
+    if (FEATURES.automatedTests) toast('info', 'No automated tests selected. Manual tests are executed by an analyst in the UAT tab.');
     return;
   }
   await runAgent(
     pid,
     'testing',
-    [{ label: `Preparing ${targets.length} automated validation(s)` }, { label: 'Recomputing KPIs independently from source rows' }, { label: 'Reconciling chart, table and filter outputs' }, { label: 'Recording results and evidence' }],
+    [{ label: FEATURES.automatedTests ? `Preparing ${targets.length} automated validation(s)` : `Checking ${targets.length} test case(s) against the source data` }, { label: 'Recomputing KPIs independently from source rows' }, { label: 'Reconciling chart, table and filter outputs' }, { label: 'Recording results and evidence' }],
     ['Generated Dashboard', 'Datasets'],
     () =>
       targets.map((t) => {
@@ -1134,11 +1153,11 @@ export async function executeTests(pid: string, ids?: string[]) {
         c.actual = r.actual;
         c.evidence = r.evidence;
         c.lastRunAt = at;
-        c.executedBy = 'Testing Agent (automated)';
+        c.executedBy = FEATURES.automatedTests ? 'Testing Agent (automated)' : 'Testing Agent';
         c.runCount += 1;
-        if (r.status === 'Passed') T.defects.filter((d) => d.testId === c.id && (d.status === 'Open' || d.status === 'In Progress')).forEach((d) => { d.status = 'Resolved'; d.resolution = 'Retest passed (automated)'; });
+        if (r.status === 'Passed') T.defects.filter((d) => d.testId === c.id && (d.status === 'Open' || d.status === 'In Progress')).forEach((d) => { d.status = 'Resolved'; d.resolution = FEATURES.automatedTests ? 'Retest passed (automated)' : 'Retest passed'; });
         if (r.status === 'Failed' && !T.defects.some((d) => d.testId === c.id && d.status !== 'Closed' && d.status !== 'Resolved')) {
-          T.defects.push({ id: `DEF-${pad(T.defects.length + 1)}`, title: `${c.component}: ${r.actual}`.slice(0, 140), testId: c.id, severity: c.priority, status: 'Open', description: `${c.objective}\n\nExpected: ${c.expected}\nActual: ${r.actual}\n\nEvidence: ${r.evidence}`, createdAt: at, raisedBy: 'Testing Agent (automated)' });
+          T.defects.push({ id: `DEF-${pad(T.defects.length + 1)}`, title: `${c.component}: ${r.actual}`.slice(0, 140), testId: c.id, severity: c.priority, status: 'Open', description: `${c.objective}\n\nExpected: ${c.expected}\nActual: ${r.actual}\n\nEvidence: ${r.evidence}`, createdAt: at, raisedBy: FEATURES.automatedTests ? 'Testing Agent (automated)' : 'Testing Agent' });
         }
       }
       const passed = results.filter((r) => r.status === 'Passed').length;
@@ -1153,7 +1172,7 @@ export async function executeTests(pid: string, ids?: string[]) {
       const last = p.versions.tests[p.versions.tests.length - 1];
       if (last) last.snapshot = { total: s.total, passed: s.passed, failed: s.failed };
       run.outputs.push('Test Results');
-      run.summary = `Executed ${results.length} automated test(s): ${passed} passed, ${failed} failed, ${results.length - passed - failed} need attention.`;
+      run.summary = `${FEATURES.automatedTests ? `Executed ${results.length} automated test(s)` : `Checked ${results.length} test case(s) against the source data`}: ${passed} passed, ${failed} failed, ${results.length - passed - failed} need attention.`;
       if (failed) run.warnings.push(...results.filter((r) => r.status === 'Failed').map((r) => `${r.id}: ${r.actual}`));
     },
     { delay: 1000 },
@@ -1225,7 +1244,10 @@ export function updateDefect(pid: string, id: string, patch: Partial<Defect>) {
     Object.assign(d, patch);
     if (patch.status === 'Resolved') {
       const t = p.testing!.cases.find((c) => c.id === d.testId);
-      if (t && t.status === 'Failed') t.status = 'Requires Retesting';
+      if (t && t.status === 'Failed') {
+        t.status = 'Requires Retesting';
+        if (t.check) revalidateSoon(pid);
+      }
     }
     log(p, 'User', 'user', `Defect ${id} → ${d.status}`, 'testing');
   });
@@ -1235,7 +1257,7 @@ export function uatGateIssues(p: Project): string[] {
   const T = p.testing;
   if (!T) return ['Tests have not been generated.'];
   const out: string[] = [];
-  if (!T.automatedCompletedAt) out.push('Automated tests have not all been executed.');
+  if (!T.automatedCompletedAt) out.push(FEATURES.automatedTests ? 'Automated tests have not all been executed.' : 'Not all test cases have been checked against the data yet.');
   const pending = T.cases.filter((c) => ['Not Started', 'In Progress', 'Requires Retesting'].includes(c.status));
   if (pending.length) out.push(`${pending.length} test case(s) are not yet executed or need retesting.`);
   const openCrit = T.defects.filter((d) => (d.status === 'Open' || d.status === 'In Progress') && (d.severity === 'Critical' || d.severity === 'High'));

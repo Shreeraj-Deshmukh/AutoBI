@@ -69,6 +69,8 @@ export function findField(text: string, profiles: DatasetProfile[], opts: { role
   return best && best.score >= 0.6 ? best : null;
 }
 
+const PLAN_WORDS = ['target', 'quota', 'budget', 'forecast', 'goal', 'plan'];
+
 /** Activity dataset whose entity is mentioned in the text (e.g. "Total calls" → Call Activity). */
 export function findEntityDataset(text: string, profiles: DatasetProfile[]): DatasetProfile | null {
   const want = expand(tokens(text));
@@ -78,6 +80,8 @@ export function findEntityDataset(text: string, profiles: DatasetProfile[]): Dat
       const lt = tokens(p.label);
       let s = et.filter((t) => want.has(t)).length * 2 + lt.filter((t) => want.has(t)).length;
       if (p.kind === 'activity') s += 0.5;
+      // "Net sales" means the sales themselves, not the table of sales targets / budgets — unless the text asks for those
+      if (et.some((t) => PLAN_WORDS.includes(t)) && ![...want].some((t) => PLAN_WORDS.includes(t))) s -= 3;
       return { p, s };
     })
     .filter((x) => x.s >= 2)
@@ -87,7 +91,8 @@ export function findEntityDataset(text: string, profiles: DatasetProfile[]): Dat
   // e.g. "Net sales" → Transaction Activity (Net_Amount).
   const acts = profiles.filter((p) => p.kind === 'activity');
   if (/(sales|revenue|amount|value|spend|transactions?|orders?|volume|units|quantity|prescriptions?|trx|nrx|scripts?)/i.test(text)) {
-    return acts.find((p) => p.columns.some((c) => c.role === 'measure')) ?? (acts.length === 1 ? acts[0] : null);
+    const actual = acts.filter((p) => !tokens(p.entity).some((t) => PLAN_WORDS.includes(t)));
+    return actual.find((p) => p.columns.some((c) => c.role === 'measure')) ?? acts.find((p) => p.columns.some((c) => c.role === 'measure')) ?? (acts.length === 1 ? acts[0] : null);
   }
   return null;
 }

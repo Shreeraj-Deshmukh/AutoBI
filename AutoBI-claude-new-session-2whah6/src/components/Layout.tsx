@@ -52,7 +52,7 @@ function AIStatus({ collapsed }: { collapsed?: boolean }) {
     <NavLink to="/settings" className="mx-3 mb-3 block rounded-lg border border-white/10 px-3 py-2 text-[0.6875rem] hover:bg-white/5">
       <div className="flex items-center gap-1.5 font-medium text-white">
         <span className={cx('h-2 w-2 rounded-full', on ? 'bg-emerald-400' : ai.status === 'checking' ? 'bg-slate-400' : 'bg-amber-400')} />
-        {on ? 'Azure AI Foundry' : 'Deterministic mode'}
+        {on ? 'Azure AI Foundry' : 'AI model'}
       </div>
       <div className="mt-0.5 truncate text-slate-400">{on ? ai.model : ai.status === 'ready' ? 'AI disabled' : 'AI model not connected'}</div>
     </NavLink>

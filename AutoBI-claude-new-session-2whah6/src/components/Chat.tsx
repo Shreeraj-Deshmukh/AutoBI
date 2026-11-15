@@ -22,7 +22,7 @@ export default function Chat({ messages, onSend, onOption, placeholder, busy, su
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
         <Bot className="h-4 w-4 text-brand-600" />
         <div className="text-sm font-semibold text-navy-900">{title}</div>
-        <span className="ml-auto text-[0.625rem] text-slate-400">{ai.status === 'ready' && ai.enabled ? `Azure AI · ${ai.model}` : 'deterministic engine'}</span>
+        <span className="ml-auto text-[0.625rem] text-slate-400">{ai.status === 'ready' && ai.model ? `Azure AI · ${ai.model}` : ''}</span>
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/60 px-3 py-3">
         {messages.map((m) => (

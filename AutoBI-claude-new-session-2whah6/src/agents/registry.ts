@@ -60,7 +60,7 @@ export const AGENTS: AgentMeta[] = [
     id: 'testing',
     name: 'Testing & UAT Agent',
     short: 'Testing',
-    role: 'Generates technical test cases and business QC scenarios from dashboard components, executes automated validations against source data, and supports analyst UAT.',
+    role: 'Generates technical test cases and business QC scenarios from dashboard components, validates them against the source data, and supports analyst UAT.',
     stage: 'testing',
     inputs: ['Generated Dashboard', 'Requirements Specification', 'Datasets'],
     outputs: ['Test Case Library', 'Test Results', 'UAT Sign-off'],

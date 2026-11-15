@@ -8,6 +8,10 @@ import { addComment, addTestCase, deleteTestCase, executeTests, isRunning, runTe
 import { summarize } from '@/agents/documentationAgent';
 import { QC_CATEGORIES, SUITE_LABEL, TEST_CATEGORIES } from '@/agents/testingAgent';
 import { fmtDateTime } from '@/lib/util';
+import { FEATURES } from '@/config/features';
+
+/** "Run automated tests" controls and labels (FEATURES.automatedTests). */
+const AUTO = FEATURES.automatedTests;
 
 type Tab = 'technical' | 'qc' | 'uat' | 'defects';
 const STATUSES: TestStatus[] = ['Not Started', 'In Progress', 'Passed', 'Failed', 'Blocked', 'Requires Retesting'];
@@ -28,7 +32,7 @@ export default function TestingStage({ p }: { p: Project }) {
         p={p}
         agent="testing"
         main={busy ? null : <Empty icon={<ClipboardCheck className="h-5 w-5" />} title="No test cases yet" action={<Button variant="primary" onClick={() => runTestingAgent(p.id)}>Generate test cases</Button>}>The Testing Agent inspects every filter, chart and table of dashboard v{p.dashboard?.version} and writes Functional Testing cases and Data Validation scenarios.</Empty>}
-        next="Generate tests, run the automated ones, then complete UAT."
+        next={AUTO ? 'Generate tests, run the automated ones, then complete UAT.' : 'Generate the test cases, then complete UAT.'}
       />
     );
 
@@ -41,7 +45,7 @@ export default function TestingStage({ p }: { p: Project }) {
   const main = (
     <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Test cases" value={s.total} sub={`${s.automated} automated · ${s.manual} manual`} />
+        <Stat label="Test cases" value={s.total} sub={AUTO ? `${s.automated} automated · ${s.manual} manual` : `${s.manual} for analyst UAT`} />
         <Stat label="Passed" value={s.passed} tone="green" sub={`${s.execPct.toFixed(0)}% executed`} />
         <Stat label="Failed" value={s.failed} tone={s.failed ? 'red' : undefined} sub={s.blocked ? `${s.blocked} blocked` : 'see Defects'} />
         <Stat label="Awaiting UAT" value={T.cases.filter((c) => c.execution === 'Manual' && !['Passed', 'Failed', 'Blocked'].includes(c.status)).length} sub="manual checks" />
@@ -49,12 +53,12 @@ export default function TestingStage({ p }: { p: Project }) {
       {stale && <Callout tone="warning" title={`Tests were written for dashboard v${T.dashboardVersion}; the dashboard is now v${p.dashboard!.version}.`} action={<Button size="sm" variant="primary" onClick={() => runTestingAgent(p.id)}>Regenerate</Button>} />}
       <div className="flex flex-wrap items-center gap-2">
         <Tabs<Tab> className="flex-1" value={tab} onChange={setTab} tabs={[{ id: 'technical', label: SUITE_LABEL.technical, count: count('technical') }, { id: 'qc', label: SUITE_LABEL.qc, count: count('qc') }, { id: 'uat', label: 'UAT', count: s.manual }, { id: 'defects', label: 'Defects', count: failed.length }]} />
-        <Button size="sm" variant="primary" icon={<PlayCircle className="h-3.5 w-3.5" />} loading={busy} onClick={() => executeTests(p.id)}>Run automated tests</Button>
+        {AUTO && <Button size="sm" variant="primary" icon={<PlayCircle className="h-3.5 w-3.5" />} loading={busy} onClick={() => executeTests(p.id)}>Run automated tests</Button>}
         <Button size="sm" variant="ghost" icon={<RefreshCw className="h-3.5 w-3.5" />} disabled={busy} onClick={() => confirm('Regenerate the test suite from the current dashboard?') && runTestingAgent(p.id)}>Regenerate</Button>
       </div>
       {(tab === 'technical' || tab === 'qc') && <CaseTable key={tab} p={p} suite={tab} onOpen={setOpen} onAdd={() => setAdding(tab)} onSwitch={setTab} />}
       {tab === 'uat' && (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid gap-5 min-[1800px]:grid-cols-[minmax(0,1fr)_20rem]">
           <UatTab p={p} onOpen={setOpen} />
           <SignoffCard p={p} onDocs={() => nav(`/p/${p.id}/documentation`)} />
         </div>
@@ -66,7 +70,7 @@ export default function TestingStage({ p }: { p: Project }) {
 
   return (
     <>
-      <StageLayout p={p} agent="testing" main={main} next={T.signoff.status === 'approved' ? 'UAT is signed off. Generate the final documentation package.' : 'Run the automated tests, fix failures, then complete UAT.'} />
+      <StageLayout p={p} agent="testing" main={main} next={T.signoff.status === 'approved' ? 'UAT is signed off. Generate the final documentation package.' : AUTO ? 'Run the automated tests, fix failures, then complete UAT.' : 'Review failures and defects, then complete UAT.'} />
       {testOpen && <TestDetail p={p} c={testOpen} onClose={() => setOpen(null)} />}
       {adding && <NewTest p={p} suite={adding} onClose={() => setAdding(null)} />}
     </>
@@ -142,8 +146,8 @@ function CaseTable({ p, suite, onOpen, onAdd, onSwitch }: { p: Project; suite: '
                   <td className="td text-xs text-slate-500">{c.expected}</td>
                 </>
               )}
-              <td className="td"><TestBadge status={c.status} /><div className="mt-1 text-[0.625rem] text-slate-400">{c.execution}</div></td>
-              <td className="td text-right" onClick={(e) => e.stopPropagation()}>{c.check && <Button size="xs" variant="ghost" icon={<Play className="h-3 w-3" />} disabled={busy} onClick={() => executeTests(p.id, [c.id])} aria-label={`Run ${c.id}`} title="Run" />}</td>
+              <td className="td"><TestBadge status={c.status} />{(AUTO || c.execution === 'Manual') && <div className="mt-1 text-[0.625rem] text-slate-400">{c.execution}</div>}</td>
+              <td className="td text-right" onClick={(e) => e.stopPropagation()}>{AUTO && c.check && <Button size="xs" variant="ghost" icon={<Play className="h-3 w-3" />} disabled={busy} onClick={() => executeTests(p.id, [c.id])} aria-label={`Run ${c.id}`} title="Run" />}</td>
             </tr>
           ))}
         </tbody>
@@ -161,9 +165,9 @@ function UatTab({ p, onOpen }: { p: Project; onOpen: (id: string) => void }) {
   const [comment, setComment] = useState('');
   const [who, setWho] = useState('UAT Analyst');
   return (
-    <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-      <Card title={`Manual scenarios (${manual.filter((x) => ['Passed', 'Failed', 'Blocked'].includes(x.status)).length}/${manual.length} done)`} bodyClass="p-0">
-        <ul className="divide-y divide-slate-100">
+    <div className="grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <Card className="lg:sticky lg:top-4" title={`Manual scenarios (${manual.filter((x) => ['Passed', 'Failed', 'Blocked'].includes(x.status)).length}/${manual.length} done)`} bodyClass="p-0">
+        <ul className="max-h-[70vh] divide-y divide-slate-100 overflow-y-auto">
           {manual.map((x) => (
             <li key={x.id}>
               <button onClick={() => { setSel(x.id); setActual(x.actual); }} className={cx('w-full px-3 py-2 text-left hover:bg-slate-50', sel === x.id && 'bg-brand-50')}>
@@ -176,8 +180,8 @@ function UatTab({ p, onOpen }: { p: Project; onOpen: (id: string) => void }) {
         </ul>
       </Card>
       {c ? (
-        <Card title={<span className="flex items-center gap-2"><span className="font-mono text-xs text-slate-500">{c.id}</span>{c.objective}</span>} subtitle={`${c.category} · ${c.page} · ${c.component}`} actions={<Button size="sm" icon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => window.open(`#/p/${p.id}/preview`, '_blank')}>Open dashboard</Button>}>
-          <div className="grid gap-4 md:grid-cols-2">
+        <Card title={<span className="block"><span className="mr-2 font-mono text-xs text-slate-500">{c.id}</span>{c.objective}</span>} subtitle={`${c.category} · ${c.page} · ${c.component}`} actions={<Button size="sm" icon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => window.open(`#/p/${p.id}/preview`, '_blank')}>Open dashboard</Button>}>
+          <div className="grid gap-4 min-[1500px]:grid-cols-2">
             <div>
               <div className="label">Preconditions</div><div className="text-sm text-slate-600">{c.preconditions || '—'}</div>
               <div className="label mt-3">Test steps</div><ol className="list-decimal pl-5 text-sm text-slate-700">{c.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
@@ -226,7 +230,7 @@ function DefectTab({ p, onOpenTest }: { p: Project; onOpenTest: (id: string) => 
                 <td className="td text-xs text-slate-700">{c.actual || c.objective}<div className="mt-0.5 text-[0.6875rem] text-slate-400">Expected: {c.expected}</div></td>
                 <td className="td"><Badge tone={c.priority === 'Critical' ? 'red' : c.priority === 'High' ? 'amber' : 'slate'}>{d?.severity ?? c.priority}</Badge></td>
                 <td className="td">{d ? <select className="input py-1 text-xs" value={d.status} onChange={(e) => updateDefect(p.id, d.id, { status: e.target.value as Defect['status'] })} aria-label={`Status of ${d.id}`}>{['Open', 'In Progress', 'Resolved', 'Closed'].map((x) => <option key={x}>{x}</option>)}</select> : <TestBadge status={c.status} />}</td>
-                <td className="td text-right">{c.check ? <Button size="xs" variant="ghost" icon={<RotateCcw className="h-3 w-3" />} disabled={busy} onClick={() => executeTests(p.id, [c.id])}>Retest</Button> : <Button size="xs" variant="ghost" onClick={() => onOpenTest(c.id)}>Open</Button>}</td>
+                <td className="td text-right">{AUTO && c.check ? <Button size="xs" variant="ghost" icon={<RotateCcw className="h-3 w-3" />} disabled={busy} onClick={() => executeTests(p.id, [c.id])}>Retest</Button> : <Button size="xs" variant="ghost" onClick={() => onOpenTest(c.id)}>Open</Button>}</td>
               </tr>
             );
           })}
@@ -291,7 +295,7 @@ function TestDetail({ p, c, onClose }: { p: Project; c: TestCase; onClose: () =>
   return (
     <Modal open onClose={onClose} wide title={<span className="flex items-center gap-2"><span className="text-sm text-slate-500">{SUITE_LABEL[c.suite]}</span>· {c.category}<TestBadge status={c.status} /></span>} footer={<>
       <Button variant="danger" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => { if (confirm(`Delete ${c.id}?`)) { deleteTestCase(p.id, c.id); onClose(); } }} className="mr-auto">Delete</Button>
-      {c.check && <Button icon={<Play className="h-3.5 w-3.5" />} loading={busy} onClick={() => executeTests(p.id, [c.id])}>{c.status === 'Failed' ? 'Retest' : 'Execute'}</Button>}
+      {AUTO && c.check && <Button icon={<Play className="h-3.5 w-3.5" />} loading={busy} onClick={() => executeTests(p.id, [c.id])}>{c.status === 'Failed' ? 'Retest' : 'Execute'}</Button>}
       <Button variant="primary" onClick={save}>Save</Button>
     </>}>
       <div className="grid gap-3 md:grid-cols-2">
@@ -303,7 +307,7 @@ function TestDetail({ p, c, onClose }: { p: Project; c: TestCase; onClose: () =>
         <Field label="Test steps (one per line)"><textarea className="input" rows={3} value={d.steps.join('\n')} onChange={(e) => setD({ ...d, steps: e.target.value.split('\n') })} /></Field>
         <Field label="Expected result"><textarea className="input" rows={3} value={d.expected} onChange={(e) => setD({ ...d, expected: e.target.value })} /></Field>
         <Field label="Priority"><select className="input" value={d.priority} onChange={(e) => setD({ ...d, priority: e.target.value as Priority })}>{PRIORITIES.map((x) => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="Execution type">{c.check ? <div className="py-2 text-sm"><Badge tone="blue">Automated</Badge> <span className="text-xs text-slate-500">validator: {c.check.kind}</span></div> : <select className="input" value={d.execution} onChange={(e) => setD({ ...d, execution: e.target.value as TestCase['execution'] })}><option>Manual</option></select>}</Field>
+        <Field label={AUTO ? 'Execution type' : 'Checked by'}>{c.check ? <div className="py-2 text-sm">{AUTO ? <><Badge tone="blue">Automated</Badge> <span className="text-xs text-slate-500">validator: {c.check.kind}</span></> : <Badge tone="blue">Reconciled with the source data</Badge>}</div> : <select className="input" value={d.execution} onChange={(e) => setD({ ...d, execution: e.target.value as TestCase['execution'] })}><option>Manual</option></select>}</Field>
         <div className="md:col-span-2"><Field label="Actual result"><textarea className="input" rows={2} value={d.actual} onChange={(e) => setD({ ...d, actual: e.target.value })} disabled={!!c.check} /></Field></div>
         {c.evidence && <div className="md:col-span-2"><div className="label">Evidence / validation notes</div><pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-[0.6875rem] text-slate-700">{c.evidence}</pre></div>}
         <div className="md:col-span-2 text-xs text-slate-500">Runs: {c.runCount} · Last executed: {c.lastRunAt ? `${fmtDateTime(c.lastRunAt)} by ${c.executedBy}` : 'never'}</div>
