@@ -84,6 +84,12 @@ const RECIPES: Recipe[] = [
   { name: 'Copay Assistance Utilization (%)', source: 'catalogue', table: 'journey', kind: 'ratio', num: 'Copay-Enrolled Patients', den: 'Copay-Eligible Patients', format: 'percent' },
 ];
 
+/**
+ * Catalogue metrics Celestra can calculate (a recipe or an alias): the others need sources outside the case log and
+ * SP journey (CRM, claims, hub logs) and are not suggested as requirements.
+ */
+export const COMPUTABLE_CATALOGUE = new Set([...RECIPES.filter((r) => r.source === 'catalogue').map((r) => r.name.toLowerCase()), ...Object.keys(ALIASES).map((k) => k.toLowerCase())]);
+
 /** Recipes that only exist as building blocks of catalogue ratios (not offered as headline KPIs). */
 export const isCatalogueHelper = (m: { catalogueRef?: string }) => !!m.catalogueRef && RECIPES.some((r) => r.name === m.catalogueRef && r.source === 'helper');
 

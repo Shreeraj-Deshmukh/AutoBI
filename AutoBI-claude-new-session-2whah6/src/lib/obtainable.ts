@@ -12,6 +12,8 @@ import type { DatasetProfile, ReqMapping } from '@/types';
 const GENERIC = new Set(
   (
     'a an the of per by for in on at with and or to from vs versus all each every any new current overall ' +
+    // question and helper words ("Where patient is stuck")
+    'where is are was were who what which when how why does do did has have had be being been it its they their them this that these those currently now still get gets got ' +
     'average avg mean median total sum number no count counts volume rate ratio percent percentage pct share proportion % ' +
     'time days day weeks week weekly months month monthly quarter quarterly year yearly ytd trend trends over top bottom highest lowest ' +
     'level levels group groups wise breakdown distribution mix split list view summary detail details id ids key status type types category ' +
@@ -117,6 +119,15 @@ export function unobtainableReason(text: string, vocab: Vocab, opts: { strict?: 
   if (absent.length * 2 > words.length || (opts.strict && absent.length)) return `Nothing in the uploaded data describes ${absent.map((w) => `"${w}"`).join(', ')}, so "${text}" cannot be ${opts.strict ? 'used' : 'calculated'}.`;
   return null;
 }
+
+/** Whether a column is about the requirement's subject (its name holds a subject word or one of its synonyms). */
+export function columnMatchesSubject(text: string, column: string): boolean {
+  const words = subjectWords(text);
+  return !words.length || words.some((w) => found(w, split(column)));
+}
+
+/** Other ways to ask for the subject in the data's words ("Where patient is stuck" → "stage"). */
+export const synonymQueries = (text: string) => subjectWords(text).flatMap((w) => SYNONYMS[w] ?? []);
 
 /**
  * The requirements the data supports: what the KPI definitions and the dashboard design are built from.

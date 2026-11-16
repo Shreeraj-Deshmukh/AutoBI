@@ -17,7 +17,7 @@ import type { DatasetMeta, Row } from '@/types';
 const KPIS = ['Net Promoter Score (patient satisfaction)', 'Average copay amount per patient', 'FRM field visits per HCP', 'Net revenue by product', 'Average patient age', 'Cost per resolved case', 'Prescription (TRx) volume by HCP', 'Call center average handle time'];
 const FILTERS = ['Patient age group', 'Patient gender', 'Sales rep', 'Hospital bed size'];
 const DIMENSIONS = ['Cases by patient ethnicity', 'Cases by insurance member ID'];
-const AVAILABLE = ['State', 'Specialty', 'Account type', 'Formulary status', 'Copay program', 'Specialty pharmacy'];
+const AVAILABLE = ['State', 'Specialty', 'Account type', 'Formulary status', 'Copay program', 'Specialty pharmacy', 'Where patient is stuck'];
 
 describe('unobtainable FRM requirements', () => {
   const d = generateAccessData();
@@ -44,6 +44,8 @@ describe('unobtainable FRM requirements', () => {
 
   it('fields the data has are not flagged', () => {
     for (const t of AVAILABLE) expect(u.mappings.find((m) => m.requirement === t)?.status, t).not.toBe('missing');
+    // "where the patient is stuck" is the journey's current stage
+    expect(u.mappings.find((m) => m.requirement === 'Where patient is stuck')?.fields.join()).toMatch(/stage/i);
     // the brief's own requirements all stay
     for (const k of extractRequirements(ACCESS_NARRATIVE, { audience: 'Leadership' }).kpis) expect(u.mappings.find((m) => m.requirement === k.text)?.status, k.text).not.toBe('missing');
   });

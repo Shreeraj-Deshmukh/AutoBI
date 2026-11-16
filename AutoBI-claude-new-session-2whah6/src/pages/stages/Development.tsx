@@ -7,7 +7,6 @@ import StageLayout from '@/components/StageLayout';
 import { Button, Callout, Card, Empty } from '@/components/ui';
 import DashboardView from '@/dashboard/DashboardView';
 import AccessCard from '@/components/AccessCard';
-import RequirementGaps from '@/components/RequirementGaps';
 import { FEATURES } from '@/config/features';
 import { isRunning, runDevelopmentAgent } from '@/store/orchestrator';
 import { useEngine } from '@/store/engineCache';
@@ -40,7 +39,6 @@ export default function DevelopmentStage({ p }: { p: Project }) {
       {b && (
         <>
           {stale && <Callout tone="warning" title={`Dashboard was built from design v${b.designVersion}; the current design is v${p.design!.version} (${p.design!.status}).`} action={p.design!.status === 'approved' ? <Button size="sm" variant="primary" onClick={() => runDevelopmentAgent(p.id)}>Rebuild from v{p.design!.version}</Button> : <Button size="sm" onClick={() => nav(`/p/${p.id}/design`)}>Approve new design</Button>}>The current dashboard is preserved until a new approved design is developed.</Callout>}
-          <RequirementGaps p={p} where="dashboard" />
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-slate-600">Dashboard <b>v{b.version}</b> · built {fmtDateTime(b.generatedAt)} from design v{b.designVersion} · {b.summary.pages} pages, {b.summary.kpis} KPIs, {b.summary.charts} charts</span>
             <div className="ml-auto flex gap-2">

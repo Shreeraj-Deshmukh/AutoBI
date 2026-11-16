@@ -8,7 +8,7 @@ import { applyDesignCommand } from './designAgent';
 import { conformSpec } from '@/lib/powerbi/support';
 import { missingRequirements, subjectWords } from '@/lib/obtainable';
 import { uid } from '@/lib/util';
-import { FRM_REQUIREMENT_KPIS } from '@/lib/catalogue';
+import { COMPUTABLE_CATALOGUE, FRM_REQUIREMENT_KPIS } from '@/lib/catalogue';
 import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
 
 /**
@@ -119,7 +119,7 @@ function toSpec(j: ReqJson, base: RequirementSpec): RequirementSpec {
 const isFrmCaseBrief = (text: string) => /\bFRMs?\b|field reimbursement/i.test(text) && /\bcases?\b/i.test(text);
 const FRM_REQ_RULES = `This is a Field Reimbursement Manager (FRM) / case-management dashboard. FRMs work individual access cases: they need the case list (patient, HCP, payer, case type, priority, days open, where the patient is stuck), while managers compare territories.
 - Use these ProcDNA KPI Catalogue metric names verbatim for case KPIs where they fit: ${FRM_REQUIREMENT_KPIS.join('; ')}.
-- Other catalogue metrics you may use (verbatim): ${KPI_CATALOGUE.filter((m) => m.isKpi).map((m) => m.name).join('; ')}.
+- Other catalogue metrics you may use (verbatim): ${KPI_CATALOGUE.filter((m) => m.isKpi && COMPUTABLE_CATALOGUE.has(m.name.toLowerCase())).map((m) => m.name).join('; ')}.
 - "pages": start with "Field Reimbursement Management" (FRM case workbench) and "FRM Performance" (territory deep dive).`;
 
 export async function aiExtractRequirements(narrative: string, info: ProjectInfo, base: RequirementSpec): Promise<RequirementSpec> {
@@ -129,6 +129,10 @@ export async function aiExtractRequirements(narrative: string, info: ProjectInfo
   const spec = toSpec(j, base);
   if (!spec.kpis.length) throw new Error('AI returned no KPIs');
   if (frm) {
+    // catalogue metrics that need other sources (CRM, claims, hub logs) are not suggested; one the user named stays
+    const named = narrative.toLowerCase();
+    const outOfReach = new Set(KPI_CATALOGUE.filter((m) => !COMPUTABLE_CATALOGUE.has(m.name.toLowerCase())).map((m) => m.name.toLowerCase()));
+    spec.kpis = spec.kpis.filter((k) => !outOfReach.has(k.text.toLowerCase()) || named.includes(k.text.toLowerCase()));
     // keep the catalogue KPIs and FRM pages the rules derived, in case the model left some out
     const lower = new Set(spec.kpis.map((k) => k.text.toLowerCase()));
     spec.kpis = [...spec.kpis, ...base.kpis.filter((k) => k.source === 'catalogue' && !lower.has(k.text.toLowerCase()))];

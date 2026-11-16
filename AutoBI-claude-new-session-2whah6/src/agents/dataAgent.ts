@@ -4,7 +4,8 @@ import { findEntityDataset, findField, findStatus } from '@/lib/semantic';
 import { uid } from '@/lib/util';
 import { buildMeasureFromText } from './kpiBuilder';
 import { bindCatalogue } from '@/lib/catalogue';
-import { dataVocabulary, unobtainableReason } from '@/lib/obtainable';
+import { columnMatchesSubject, dataVocabulary, synonymQueries, unobtainableReason } from '@/lib/obtainable';
+import type { ColumnRole } from '@/types';
 
 /** Data Intelligence Agent: profiling, understanding, relationships, quality, requirement mapping. */
 
@@ -124,7 +125,13 @@ export function mapRequirements(spec: RequirementSpec, profiles: DatasetProfile[
         out.push({ id: uid('map'), requirement: d.text, kind, sources: [], fields: [], status: 'missing', note: `${why} It is left out of the dashboard.` });
         continue;
       }
-      const f = findField(d.text, profiles, { roles: ['dimension', 'status', 'attribute', 'foreign_key'], prefer: primaryActivity?.datasetId });
+      const opts = { roles: ['dimension', 'status', 'attribute', 'foreign_key'] as ColumnRole[], prefer: primaryActivity?.datasetId };
+      let f = findField(d.text, profiles, opts);
+      // the column must be about the subject ("Where patient is stuck" is not Patient_ID): try the data's words for it
+      if (f && !columnMatchesSubject(d.text, f.column)) {
+        const alt = synonymQueries(d.text).map((q) => findField(q, profiles, opts)).find((x) => x && columnMatchesSubject(d.text, x.column));
+        if (alt) f = { ...alt, score: Math.max(alt.score, 0.9) };
+      }
       if (!f) {
         out.push({ id: uid('map'), requirement: d.text, kind, sources: [], fields: [], status: 'missing', note: `No field corresponding to "${d.text}" was found in the uploaded data.` });
         continue;
