@@ -179,7 +179,8 @@ export class Engine {
     });
   }
 
-  private aggregate(m: MeasureDef, rows: WideRow[]): number {
+  /** Measure over rows; an average or median of no values is blank (null), as in Power BI. */
+  private aggregate(m: MeasureDef, rows: WideRow[]): number | null {
     const ds = m.datasetId!;
     const conds = conditionsOf(m);
     const rs = conds.length ? rows.filter((w) => conds.every((c) => testCond(c, w.v[ref(ds, c.field)]))) : rows;
@@ -193,10 +194,12 @@ export class Engine {
         return rs.reduce((s, w) => s + (typeof w.v[fr!] === 'number' ? (w.v[fr!] as number) : 0), 0);
       case 'avg': {
         const ns = rs.map((w) => w.v[fr!]).filter((x): x is number => typeof x === 'number');
-        return ns.length ? ns.reduce((s, x) => s + x, 0) / ns.length : 0;
+        return ns.length ? ns.reduce((s, x) => s + x, 0) / ns.length : null;
       }
-      case 'median':
-        return median(rs.map((w) => w.v[fr!]).filter((x): x is number => typeof x === 'number'));
+      case 'median': {
+        const ns = rs.map((w) => w.v[fr!]).filter((x): x is number => typeof x === 'number');
+        return ns.length ? median(ns) : null;
+      }
       default:
         return 0;
     }
@@ -251,7 +254,7 @@ export class Engine {
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k)!.push(w);
     }
-    for (const [k, rows] of buckets) out.set(k, this.aggregate(m, rows));
+    for (const [k, rows] of buckets) { const v = this.aggregate(m, rows); if (v != null) out.set(k, v); }
     return out;
   }
 
@@ -288,6 +291,7 @@ export class Engine {
       let total = 0;
       for (const [b, rs] of inner) {
         const v = this.aggregate(m, rs);
+        if (v == null) continue;
         o[b] = v;
         total += v;
       }
@@ -316,7 +320,7 @@ export class Engine {
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k)!.push(w);
     }
-    for (const [k, rows] of buckets) out.set(k, this.aggregate(m, rows));
+    for (const [k, rows] of buckets) { const v = this.aggregate(m, rows); if (v != null) out.set(k, v); }
     return out;
   }
 
@@ -383,7 +387,7 @@ export class Engine {
       if (!buckets.has(b)) buckets.set(b, []);
       buckets.get(b)!.push(w);
     }
-    for (const [k, rows] of buckets) out.set(k, this.aggregate(m, rows));
+    for (const [k, rows] of buckets) { const v = this.aggregate(m, rows); if (v != null) out.set(k, v); }
     return out;
   }
 

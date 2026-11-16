@@ -204,6 +204,10 @@ function MultiFilter({ label, options, value, onChange, testId }: { label: strin
 
 // ───────────────────────────── visuals ─────────────────────────────
 
+/** Card value text: a blank measure reads "(Blank)", as on Power BI cards. */
+const cardText = (v: number | null | undefined, m?: MeasureDef) => (v == null || Number.isNaN(v) ? '(Blank)' : fmtMeasure(v, m));
+/** Table cell text: a blank measure is an empty cell, as in a Power BI table. */
+const cellValue = (v: number | null | undefined, m?: MeasureDef) => (v == null || Number.isNaN(v) ? '' : fmtMeasure(v, m));
 const measureOf = (ctx: Ctx, id: string) => ctx.foundation.measures.find((x) => x.id === id);
 const exportRows = (title: string, rows: Record<string, unknown>[]) => download(`${title.replace(/[^\w]+/g, '_')}.csv`, toCsv(rows), 'text/csv');
 
@@ -261,7 +265,7 @@ function KpiCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   }
   return (
     <VisualBox title={c.title} subtitle={sub} testId="kpi" dataTitle={c.title}>
-      <div className="flex h-full items-center justify-center font-semibold tabular-nums" style={{ fontSize: pt(R.kpiValue), color: C.ink }} data-testid="kpi-value" title={m?.logic}>{fmtMeasure(k.current, m)}</div>
+      <div className="flex h-full items-center justify-center font-semibold tabular-nums" style={{ fontSize: pt(R.kpiValue), color: C.ink }} data-testid="kpi-value" title={m?.logic}>{cardText(k.current, m)}</div>
     </VisualBox>
   );
 }
@@ -288,7 +292,7 @@ function MultiValueCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   const { current } = ctx.engine.resolve(ctx.f);
   const items = c.measureIds.map((id, i) => {
     const m = measureOf(ctx, id);
-    return { value: fmtMeasure(ctx.engine.value(id, ctx.f, current), m), label: c.labels?.[i] ?? m?.name ?? '', title: m?.logic };
+    return { value: cardText(ctx.engine.value(id, ctx.f, current), m), label: c.labels?.[i] ?? m?.name ?? '', title: m?.logic };
   });
   return (
     <VisualBox title={c.title} subtitle={c.description || undefined} testId="kpi-group" dataTitle={c.title}>
@@ -316,7 +320,7 @@ function CategoryRowCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
               <tr>
                 {items.map((g) => (
                   <td key={g.key} className={cx('cursor-pointer border-l border-neutral-200 px-2 pt-1 text-right font-semibold tabular-nums first:border-l-0', selected.length && !selected.includes(g.key) && 'opacity-40')} style={{ fontSize: pt(R.value), color: C.ink }} onClick={() => ctx.toggle(c.dimension!, g.key)} data-testid="kpi-value">
-                    {fmtMeasure(g.value, m)}
+                    {cardText(g.value, m)}
                   </td>
                 ))}
               </tr>
@@ -334,11 +338,11 @@ function ExtremesCard({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
   const g = ctx.engine.group(c.measureIds[0], c.dimension!, ctx.f).filter((x) => x.key !== UNMATCHED && x.key !== BLANK).sort((a, b) => b.value - a.value || a.key.localeCompare(b.key));
   const hi = g[0];
   const lo = g[g.length - 1];
-  const text = (x?: { key: string; value: number }) => (x ? `${x.key} · ${fmtMeasure(x.value, m)}` : '—');
+  const text = (x?: { key: string; value: number }) => (x ? `${x.key} · ${fmtMeasure(x.value, m)}` : '(Blank)');
   let items: { value: string; label: string }[];
   if (c.topOnly) {
     const attr = hi ? display(ctx.engine.table(c.dimension!, [c.measureIds[0]], [c.topOnly], ctx.f).find((r) => r.__key === hi.key)?.[c.topOnly] ?? null) : undefined;
-    items = [{ value: text(hi), label: fieldLabel(ctx.foundation, c.dimension!) }, { value: attr ?? '—', label: fieldLabel(ctx.foundation, c.topOnly) }];
+    items = [{ value: text(hi), label: fieldLabel(ctx.foundation, c.dimension!) }, { value: attr ?? '(Blank)', label: fieldLabel(ctx.foundation, c.topOnly) }];
   } else items = c.lowIsBest ? [{ value: text(lo), label: 'Fastest' }, { value: text(hi), label: 'Slowest' }] : [{ value: text(hi), label: 'Highest' }, { value: text(lo), label: 'Lowest' }];
   return (
     <VisualBox title={c.title} subtitle={c.description || undefined} testId="extremes" dataTitle={c.title}>
@@ -633,19 +637,19 @@ function TableVisual({ c, ctx }: { c: DashComponent; ctx: Ctx }) {
               <tr key={String(r.__key)} onClick={() => ctx.toggle(c.dimension!, String(r.__key))} className="cursor-pointer hover:!bg-brand-50" style={{ background: selected.includes(String(r.__key)) ? '#ecdcff' : i % 2 ? C.page : '#fff' }}>
                 <td className="px-2 py-0.5" style={tdStyle}>{String(r.__key)}</td>
                 {attrs.map((a) => <td key={a} className="px-2 py-0.5" style={tdStyle}>{display(r[a] ?? null)}</td>)}
-                {ms.map((m) => <td key={m.id} className="px-2 py-0.5 text-right tabular-nums" style={tdStyle}>{fmtMeasure(r[m.id] as number, m)}</td>)}
+                {ms.map((m) => <td key={m.id} className="px-2 py-0.5 text-right tabular-nums" style={tdStyle}>{cellValue(r[m.id] as number, m)}</td>)}
                 {c.flags && <td className="px-2 py-0.5" style={tdStyle} aria-label="priority flag">{flagOf(Number(r[c.measureIds[0]] ?? 0))}</td>}
               </tr>
             ))}
           </tbody>
-          <tfoot className="sticky bottom-0 bg-white">
+          {rows.length > 0 && <tfoot className="sticky bottom-0 bg-white">
             <tr style={{ borderTop: `1px solid ${C.primary}` }}>
               <td className="px-2 py-1 font-bold" style={tdStyle}>Total</td>
               {attrs.map((a) => <td key={a} />)}
-              {ms.map((m) => <td key={m.id} className="px-2 py-1 text-right font-bold tabular-nums" style={tdStyle}>{totals[m.id] == null ? '' : fmtMeasure(totals[m.id] as number, m)}</td>)}
+              {ms.map((m) => <td key={m.id} className="px-2 py-1 text-right font-bold tabular-nums" style={tdStyle}>{cellValue(totals[m.id] as number | null, m)}</td>)}
               {c.flags && <td className="px-2 py-1 font-bold" style={tdStyle}>{flagOf(Number(totals[c.measureIds[0]] ?? 0))}</td>}
             </tr>
-          </tfoot>
+          </tfoot>}
         </table>
         {!rows.length && <div className="py-8"><NoData /></div>}
       </div>

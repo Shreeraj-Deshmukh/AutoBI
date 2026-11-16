@@ -319,11 +319,35 @@ const typeFrom = (s: string) => TYPE_WORDS.find(([re]) => re.test(s))?.[1];
 function findComponents(spec: DashboardSpec, phrase: string) {
   const want = tokens(phrase).filter((t) => !['the', 'chart', 'analysis', 'visual', 'visualization', 'a', 'to', 'graph'].includes(t));
   const all = spec.pages.flatMap((p) => p.components.map((c) => ({ page: p, c })));
+  // a visual named exactly is that visual only ("# Cases by Region", not every "… Cases by Region" card)
+  const norm = (s: string) => s.toLowerCase().replace(/^the\s+/, '').replace(/\s+(chart|visual|card|table)$/, '').replace(/[^a-z0-9%#]+/g, ' ').trim();
+  const exact = all.filter((x) => norm(x.c.title) === norm(phrase));
+  if (exact.length) return exact.map((x) => ({ ...x, s: 100 }));
   const typ = typeFrom(phrase);
   return all
     .map((x) => ({ ...x, s: tokens(x.c.title).filter((t) => want.includes(t)).length + (typ && x.c.type === typ ? 1.5 : 0) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s);
+}
+
+/** The other visuals on the same row of the page grid as `c` (rows as the page layout builds them; cards apart). */
+function rowPartners(components: DashComponent[], c: DashComponent): DashComponent[] {
+  let row: DashComponent[] = [];
+  let section: string | undefined;
+  for (const x of components) {
+    if (CARD_TYPES.includes(x.type) || (x.section && x.section !== section)) {
+      if (row.includes(c)) break;
+      row = [];
+      section = x.section ?? section;
+      if (CARD_TYPES.includes(x.type)) continue;
+    }
+    if (row.reduce((s, r) => s + r.width, 0) + x.width > 12) {
+      if (row.includes(c)) break;
+      row = [];
+    }
+    row.push(x);
+  }
+  return row.includes(c) ? row.filter((x) => x !== c) : [];
 }
 
 function findPage(spec: DashboardSpec, phrase: string) {
@@ -435,6 +459,7 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
   if (m) {
     const pg = findPage(spec, m[1]);
     if (pg && /page/i.test(m[1])) {
+      if (spec.pages.some((p) => p !== pg && p.name.trim().toLowerCase() === m![2].trim().toLowerCase())) return no(`There is already a page called "${m[2]}". Choose another name.`);
       pg.name = m[2];
       return { spec, changed: true, reply: `Renamed page to "${m[2]}".` };
     }
@@ -453,7 +478,8 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
     const primary = exec.components.find((c) => c.type === 'kpi');
     if (primary) exec.components.push(comp({ type: 'line', title: `${humanize(grain)}ly ${primary.title} Comparison`, measureIds: primary.measureIds, timeGrain: grain, width: 12, description: `${humanize(grain)}ly trend for period-over-period comparison.` }));
     spec.defaultPeriod = grain === 'week' ? 'last4w' : grain === 'month' ? 'last6m' : 'last12m';
-    return { spec, changed: true, reply: `Added a ${grain}ly comparison: KPI cards on ${exec.name} now show current vs previous period, a ${grain}ly trend line was added, and the default period is now ${spec.defaultPeriod === 'last4w' ? 'the last 4 weeks' : spec.defaultPeriod}.` };
+    const period = PERIOD_LABELS[spec.defaultPeriod].toLowerCase();
+    return { spec, changed: true, reply: `Added a ${grain}ly comparison: KPI cards on ${exec.name} now show current vs previous period and a ${grain}ly trend line was added. ${spec.filters.some((x) => x.type === 'period') ? `The Time Period filter now opens on ${period}.` : `Add a time period filter to choose the period; it will open on ${period}.`}` };
   }
 
   // threshold visuals: "Show HCPs with more than 5 patients delayed in PA"
@@ -480,6 +506,7 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
   // add page
   m = /add (?:a |new )?page (?:called |named )?["“]?(.+?)["”]?$/i.exec(cmd);
   if (m) {
+    if (spec.pages.some((p) => p.name.trim().toLowerCase() === m![1].trim().toLowerCase())) return no(`There is already a page called "${m[1]}".`);
     spec.pages.push({ id: uid('pg'), name: m[1], description: 'User-added page.', components: [] });
     return { spec, changed: true, reply: `Added page "${m[1]}". Add KPIs or charts from the component palette.` };
   }
@@ -523,8 +550,12 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
   if (m) {
     const h = findComponents(spec, m[1])[0];
     if (!h) return no(`I couldn't find "${m[1]}".`);
+    // the visual it shared a row with: left alone on its row, it takes the full width too (no empty half row)
+    const partners = m[2] === 'full' ? rowPartners(h.page.components, h.c) : [];
     h.c.width = m[2] === 'full' ? 12 : 6;
-    return { spec, changed: true, reply: `"${h.c.title}" is now ${m[2]} width.` };
+    const widened = partners.length === 1 && partners[0].width < 12 ? partners[0] : null;
+    if (widened) widened.width = 12;
+    return { spec, changed: true, reply: `"${h.c.title}" is now ${m[2]} width.${widened ? ` "${widened.title}" was on the same row, so it is full width too (no empty half row).` : ''}` };
   }
 
   return no('I can apply requests such as: "Move account tier analysis to the executive overview", "Add a weekly comparison", "Remove the state filter", "Add a specialty filter", "Replace the pie chart with a bar chart", "Rename Call Engagement Trend to Activity Trend", "Add page Regional Deep Dive", "Add KPI Accounts Reached".');

@@ -109,7 +109,9 @@ export function resolvePeriod(preset: PeriodPreset, anchor: number, min: number,
     case 'custom': {
       const s = custom?.start ? parseDate(custom.start)?.t : min;
       const e = custom?.end ? parseDate(custom.end)?.t : end;
-      return { start: s ?? min, end: e ?? end };
+      // dates typed the wrong way round still mean that range (Power BI's date slicer cannot be reversed)
+      const [a, b] = [s ?? min, e ?? end];
+      return a <= b ? { start: a, end: b } : { start: b, end: a };
     }
   }
 }
