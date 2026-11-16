@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Play, PlayCircle, Plus, CheckCircle2, XCircle, ExternalLink, Paperclip, Trash2, ClipboardCheck, ShieldCheck, Search, RefreshCw, Ban, RotateCcw } from 'lucide-react';
 import type { Defect, Priority, Project, TestCase, TestStatus } from '@/types';
 import StageLayout from '@/components/StageLayout';
-import { Button, Callout, Card, Badge, Tabs, Modal, Field, Empty, Stat, TestBadge, cx } from '@/components/ui';
+import { Button, Callout, Card, Badge, Tabs, Modal, Field, Empty, TestBadge, cx } from '@/components/ui';
 import { addComment, addTestCase, deleteTestCase, executeTests, isRunning, runTestingAgent, signOffUat, uatGateIssues, updateDefect, updateTest } from '@/store/orchestrator';
 import { summarize } from '@/agents/documentationAgent';
 import { QC_CATEGORIES, SUITE_LABEL, TEST_CATEGORIES } from '@/agents/testingAgent';
@@ -43,12 +43,6 @@ export default function TestingStage({ p }: { p: Project }) {
 
   const main = (
     <>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Test cases" value={s.total} sub={AUTO ? `${s.automated} automated · ${s.manual} manual` : `${s.manual} for analyst UAT`} />
-        <Stat label="Passed" value={s.passed} tone="green" sub={`${s.execPct.toFixed(0)}% executed`} />
-        <Stat label="Failed" value={s.failed} tone={s.failed ? 'red' : undefined} sub={s.blocked ? `${s.blocked} blocked` : 'see Defects'} />
-        <Stat label="Awaiting UAT" value={T.cases.filter((c) => c.execution === 'Manual' && !['Passed', 'Failed', 'Blocked'].includes(c.status)).length} sub="manual checks" />
-      </div>
       {stale && <Callout tone="warning" title={`Tests were written for dashboard v${T.dashboardVersion}; the dashboard is now v${p.dashboard!.version}.`} action={<Button size="sm" variant="primary" onClick={() => runTestingAgent(p.id)}>Regenerate</Button>} />}
       <div className="flex flex-wrap items-center gap-2">
         <Tabs<Tab> className="flex-1" value={tab} onChange={setTab} tabs={[{ id: 'technical', label: SUITE_LABEL.technical, count: count('technical') }, { id: 'qc', label: SUITE_LABEL.qc, count: count('qc') }, { id: 'uat', label: 'UAT', count: s.manual }, { id: 'defects', label: 'Defects', count: failed.length }]} />
