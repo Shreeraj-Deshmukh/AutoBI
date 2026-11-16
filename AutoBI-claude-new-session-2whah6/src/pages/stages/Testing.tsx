@@ -14,7 +14,6 @@ import { FEATURES } from '@/config/features';
 const AUTO = FEATURES.automatedTests;
 
 type Tab = 'technical' | 'qc' | 'uat' | 'defects';
-const STATUSES: TestStatus[] = ['Not Started', 'In Progress', 'Passed', 'Failed', 'Blocked', 'Requires Retesting'];
 const PRIORITIES: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
 const PAGE_SIZE = 25;
 
@@ -80,22 +79,20 @@ export default function TestingStage({ p }: { p: Project }) {
 function CaseTable({ p, suite, onOpen, onAdd, onSwitch }: { p: Project; suite: 'technical' | 'qc'; onOpen: (id: string) => void; onAdd: () => void; onSwitch: (t: Tab) => void }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
-  const [st, setSt] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const busy = isRunning(p, 'testing');
   const all = p.testing!.cases.filter((c) => c.suite === suite);
-  const cases = all.filter((c) => (!cat || c.category === cat) && (!st || c.status === st) && (!q || `${c.id} ${c.component} ${c.objective} ${c.page}`.toLowerCase().includes(q.toLowerCase())));
+  const cases = all.filter((c) => (!cat || c.category === cat) && (!q || `${c.id} ${c.component} ${c.objective} ${c.page}`.toLowerCase().includes(q.toLowerCase())));
   const cats = [...new Set(all.map((c) => c.category))];
   const qc = suite === 'qc';
   // the header counters span both suites; when this tab has no match, say where the matches are
   const other: 'technical' | 'qc' = qc ? 'technical' : 'qc';
-  const elsewhere = cases.length || (!st && !q) ? 0 : p.testing!.cases.filter((c) => c.suite === other && (!st || c.status === st) && (!q || `${c.id} ${c.component} ${c.objective} ${c.page}`.toLowerCase().includes(q.toLowerCase()))).length;
+  const elsewhere = cases.length || !q ? 0 : p.testing!.cases.filter((c) => c.suite === other && (!q || `${c.id} ${c.component} ${c.objective} ${c.page}`.toLowerCase().includes(q.toLowerCase()))).length;
   return (
     <Card bodyClass="p-0">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
         <div className="relative"><Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" /><input className="input w-56 py-1.5 pl-7 text-xs" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select className="input w-auto py-1.5 text-xs" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category filter"><option value="">{qc ? 'All QC categories' : 'All test types'}</option>{cats.map((c) => <option key={c}>{c}</option>)}</select>
-        <select className="input w-auto py-1.5 text-xs" value={st} onChange={(e) => setSt(e.target.value)} aria-label="Status filter"><option value="">All statuses</option>{STATUSES.map((c) => <option key={c}>{c}</option>)}</select>
         <span className="text-xs text-slate-500">{cases.length} of {all.length}</span>
         <Button size="sm" variant="ghost" className="ml-auto" icon={<Plus className="h-3.5 w-3.5" />} onClick={onAdd}>Add {qc ? 'scenario' : 'test case'}</Button>
       </div>
@@ -103,22 +100,20 @@ function CaseTable({ p, suite, onOpen, onAdd, onSwitch }: { p: Project; suite: '
         <colgroup>
           <col className="w-12" />
           {qc ? <><col className="w-44" /><col className="w-40" /><col /><col className="w-72" /></> : <><col className="w-24" /><col className="w-36" /><col className="w-24" /><col /><col className="w-64" /></>}
-          <col className="w-24" />
           <col className="w-12" />
         </colgroup>
         <thead>
           <tr>
             <th className="th">S. No.</th>
             {qc ? <><th className="th">Section</th><th className="th">QC Category</th><th className="th">Business Validation</th><th className="th">Expected Outcome</th></> : <><th className="th">Test Type</th><th className="th">Dashboard Element</th><th className="th">Element Type</th><th className="th">Test Case</th><th className="th">Expected Result</th></>}
-            <th className="th">Status</th>
             <th className="th" />
           </tr>
         </thead>
         <tbody>
           {!cases.length && (
             <tr>
-              <td className="td py-6 text-center text-xs text-slate-500" colSpan={qc ? 7 : 8} data-testid="no-match">
-                No {st ? `"${st}" ` : ''}test cases match in {SUITE_LABEL[suite]}.
+              <td className="td py-6 text-center text-xs text-slate-500" colSpan={qc ? 6 : 7} data-testid="no-match">
+                No test cases match in {SUITE_LABEL[suite]}.
                 {elsewhere > 0 && (
                   <> {elsewhere} matching case{elsewhere === 1 ? ' is' : 's are'} in {SUITE_LABEL[other]}.{' '}
                     <button className="font-medium text-brand-700 hover:underline" onClick={() => onSwitch(other)}>Show {SUITE_LABEL[other]}</button>
@@ -146,7 +141,6 @@ function CaseTable({ p, suite, onOpen, onAdd, onSwitch }: { p: Project; suite: '
                   <td className="td text-xs text-slate-500">{c.expected}</td>
                 </>
               )}
-              <td className="td"><TestBadge status={c.status} />{(AUTO || c.execution === 'Manual') && <div className="mt-1 text-[0.625rem] text-slate-400">{c.execution}</div>}</td>
               <td className="td text-right" onClick={(e) => e.stopPropagation()}>{AUTO && c.check && <Button size="xs" variant="ghost" icon={<Play className="h-3 w-3" />} disabled={busy} onClick={() => executeTests(p.id, [c.id])} aria-label={`Run ${c.id}`} title="Run" />}</td>
             </tr>
           ))}

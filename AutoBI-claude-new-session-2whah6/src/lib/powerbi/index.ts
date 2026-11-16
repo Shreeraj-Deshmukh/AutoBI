@@ -113,8 +113,9 @@ function readme(name: string, input: ExportInput, s: PowerBiExport['summary'], w
     '',
     'DIFFERENCES FROM THE CELESTRA DASHBOARD',
     '- Records with keys missing from a master table show as "(Blank)" instead of "(Unmatched)".',
-    '- The case detail pop-up and journey timeline are not exported; use the case list and the drilldown.',
     '- KPI cards show the change against the previous period as a subtitle.',
+    // requirements the data cannot support: left out of the report, never shown as a similar measure
+    ...(input.foundation.gaps.length ? ['', 'REQUIREMENTS NOT IN THIS REPORT (the uploaded data cannot support them)', ...input.foundation.gaps.map((g) => `- ${g.replace(/ It is left out of the dashboard\.$/, '')}`)] : []),
     ...(warnings.length ? ['', 'EXPORT NOTES', ...warnings.map((w) => `- ${w}`)] : []),
     '',
   ].join('\r\n');

@@ -11,6 +11,7 @@ import { FEATURES } from '@/config/features';
 import { periodFilterDef } from '@/lib/periodFilter';
 import { PERIOD_LABELS } from '@/lib/dates';
 import { conformSpec } from '@/lib/powerbi/support';
+import { dataVocabulary, unobtainableReason } from '@/lib/obtainable';
 
 /** Dashboard Design Agent: generates and edits a configuration-driven wireframe. */
 
@@ -377,6 +378,7 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
   const low = cmd.toLowerCase();
   const active = spec.pages.find((p) => p.id === ctx.activePageId) ?? spec.pages[0];
   const no = (reply: string): DesignEditResult => ({ spec: input, reply, changed: false });
+  const vocab = dataVocabulary(ctx.u.profiles);
 
   // move X to Y
   let m = /move (.+?) (?:to|into|onto) (?:the )?(.+?)(?: page)?$/i.exec(cmd);
@@ -420,9 +422,11 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
         }
         continue;
       }
-      const fm = findField(part, ctx.u.profiles, { roles: ['dimension', 'status', 'attribute', 'foreign_key'] });
+      // not in the data at all: say so instead of adding a near-match (a "gender" filter is not a Patient ID filter)
+      const why = unobtainableReason(part, vocab, { strict: true });
+      const fm = why ? null : findField(part, ctx.u.profiles, { roles: ['dimension', 'status', 'attribute', 'foreign_key'] });
       if (!fm) {
-        problems.push(`I couldn't find a field for "${part}" in the data, so I can't add that filter.`);
+        problems.push(why ? `I can't add a "${part}" filter: ${why}` : `I couldn't find a field for "${part}" in the data, so I can't add that filter.`);
         continue;
       }
       const r = ref(fm.datasetId, fm.column);
@@ -485,6 +489,8 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
   // threshold visuals: "Show HCPs with more than 5 patients delayed in PA"
   m = /^(?:show|add|list|highlight|identify|flag)?\s*(?:the\s+|a\s+|an\s+)?(.+?)\s+(?:with|where|having|that have)\s+(more than|over|greater than|at least|>=|>)\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(.+?)(?:\s+(?:to|on) (?:the )?(.+?)(?: page)?)?$/i.exec(cmd);
   if (m) {
+    const whyField = unobtainableReason(m[1], vocab, { strict: true }) ?? unobtainableReason(m[4], vocab);
+    if (whyField) return no(`I can't add that: ${whyField}`);
     const n = /^\d+$/.test(m[3]) ? Number(m[3]) : ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'].indexOf(m[3].toLowerCase()) + 1;
     const fm = findField(m[1].replace(/s$/i, ''), ctx.u.profiles, { roles: ['dimension', 'status', 'attribute'] });
     if (!fm) return no(`I couldn't find a field for "${m[1]}".`);
@@ -514,6 +520,11 @@ function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnders
   // add kpi / chart for a measure
   m = /add (?:a |an )?(kpi|card|chart|bar chart|line chart|donut|table)?\s*(?:for|of|showing)?\s*(.+?)(?: by (.+?))?(?: to (?:the )?(.+?)(?: page)?)?$/i.exec(cmd);
   if (m && /^add/i.test(cmd)) {
+    // a KPI or split the data cannot support is not swapped for a measure that shares a word
+    const whyMeasure = unobtainableReason(m[2], vocab);
+    if (whyMeasure) return no(`I can't add that: ${whyMeasure}`);
+    const whyDim = m[3] ? unobtainableReason(m[3], vocab, { strict: true }) : null;
+    if (whyDim) return no(`I can't split it by "${m[3]}": ${whyDim}`);
     const measure = ctx.f.measures.map((x) => ({ x, s: tokens(x.name).filter((t) => tokens(m![2]).includes(t)).length })).sort((a, b) => b.s - a.s)[0];
     if (!measure || measure.s === 0) return no(`I couldn't find a KPI definition matching "${m[2]}". Define it in the Reporting Foundation first.`);
     const page = (m[4] && findPage(spec, m[4])) || active;

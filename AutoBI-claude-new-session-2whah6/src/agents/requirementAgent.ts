@@ -21,7 +21,8 @@ const METRICS: { re: RegExp; entity: string; kpis: string[]; dataset: string }[]
     dataset: 'Email activity (one row per email sent, with delivery and open status)',
   },
   { re: /\bcampaigns?\b/i, entity: 'campaign', kpis: [], dataset: 'Campaign master (campaign names, types and dates)' },
-  { re: /\b(sales|revenue)\b/i, entity: 'sale', kpis: ['Total sales'], dataset: 'Sales transactions' },
+  // (not "sales territory", "sales rep", ...: those are about the sales organisation, not sales figures)
+  { re: /\b(sales|revenue)\b(?!\s+(?:territor|reps?\b|representative|region|district|team|force|org))/i, entity: 'sale', kpis: ['Total sales'], dataset: 'Sales transactions' },
   { re: /\borders?\b/i, entity: 'order', kpis: ['Total orders'], dataset: 'Order transactions' },
   { re: /\btrx\b|\bnrx\b|\bprescriptions? (volume|data|trend|counts?|share)\b|\bscripts?\b/i, entity: 'prescription', kpis: ['Total TRx', 'Total NRx'], dataset: 'Prescription data (TRx / NRx by HCP, product and week)' },
   { re: /\btickets?\b|\bincidents?\b/i, entity: 'ticket', kpis: ['Total tickets'], dataset: 'Ticket / incident log' },

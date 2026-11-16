@@ -1,4 +1,5 @@
 import type { DatasetMeta, Row } from '@/types';
+import { supportedRequirements } from '@/lib/obtainable';
 import { applyClarification, extractRequirements } from '@/agents/requirementAgent';
 import { runDataIntelligence } from '@/agents/dataAgent';
 import { runFoundation } from '@/agents/foundationAgent';
@@ -26,8 +27,8 @@ export function runDemoPipeline(name: string, narrative: string, tables: { name:
   let spec = extractRequirements(narrative, { audience: 'Leadership' });
   for (const a of spec.ambiguities) spec = applyClarification(spec, a, a.options[0]);
   const u = runDataIntelligence(metas, rowsOf, spec);
-  const f = runFoundation(u, spec);
-  const design = generateDesign(u, f, spec);
+  const f = runFoundation(u, supportedRequirements(spec, u.mappings));
+  const design = generateDesign(u, f, supportedRequirements(spec, u.mappings));
   const engine = new Engine({ profiles: u.profiles, relationships: u.relationships, measures: f.measures, rowsOf });
   const build = buildDashboard(design, 1, u, f, engine);
   const pbi = buildPowerBiProject({ name, profiles: u.profiles, relationships: u.relationships, foundation: f, spec: build.spec, rowsOf, anchor: engine.anchor, minDate: engine.minDate });

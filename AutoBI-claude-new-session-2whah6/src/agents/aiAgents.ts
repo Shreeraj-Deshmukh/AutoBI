@@ -6,6 +6,7 @@ import type { Clarification, DashboardSpec, DataUnderstanding, Foundation, Proje
 import { chatJSON } from './llm';
 import { applyDesignCommand } from './designAgent';
 import { conformSpec } from '@/lib/powerbi/support';
+import { missingRequirements, subjectWords } from '@/lib/obtainable';
 import { uid } from '@/lib/util';
 import { FRM_REQUIREMENT_KPIS } from '@/lib/catalogue';
 import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
@@ -53,7 +54,9 @@ export function projectBrief(ctx: AgentContext | undefined, parts: ('engagement'
     const tables = u.profiles.map((p) => `- ${p.label} (${p.kind}, ${p.rowCount} rows; ${p.primaryKey ? `one row per ${p.entity.toLowerCase()}, key ${p.primaryKey}` : p.recordKey ? `several lines per ${p.entity.toLowerCase()}, ${p.recordKey} repeats` : 'no unique key'}${p.dateField ? `; event date ${p.dateField}` : ''})`);
     const links = u.relationships.filter((x) => x.status !== 'rejected').map((x) => `${label(x.fromDataset)}.${x.fromField} → ${label(x.toDataset)}.${x.toField}`);
     const issues = u.issues.filter((x) => x.severity !== 'info' && !x.resolved).slice(0, 6).map((x) => x.message);
-    out.push(`DATA\n${tables.join('\n')}${links.length ? `\nLinks (many → one): ${links.join('; ')}` : ''}${issues.length ? `\nKnown data-quality issues: ${issues.join(' | ')}` : ''}`);
+    // requirements the data cannot support: the model must not show, rename or approximate them
+    const missing = (u.mappings ?? []).filter((m) => m.status === 'missing').map((m) => m.requirement);
+    out.push(`DATA\n${tables.join('\n')}${links.length ? `\nLinks (many → one): ${links.join('; ')}` : ''}${issues.length ? `\nKnown data-quality issues: ${issues.join(' | ')}` : ''}${missing.length ? `\nNOT IN THE DATA — never show, rename or approximate these (no visual, no KPI, no filter for them): ${[...new Set(missing)].join('; ')}` : ''}`);
   }
   if (parts.includes('history') && ctx.history?.length) {
     out.push(`RECENT CONVERSATION (oldest first)\n${ctx.history.slice(-8).map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${clip(m.text.replace(/\s+/g, ' '), 320)}`).join('\n')}`);
@@ -378,6 +381,7 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
     return cands.find((r) => !fromDs || reachable(u.relationships, fromDs, r.split('::')[0])) ;
   };
   const TYPES: ComponentType[] = ['kpi', 'funnel', 'bar', 'hbar', 'donut', 'line', 'area', 'table', 'stacked'];
+  const missingSubjects = missingRequirements(u0.mappings).map((m) => subjectWords(m.requirement));
   const pages: DashPage[] = [];
   let valid = 0;
   for (const pg of Array.isArray(j.pages) ? j.pages : []) {
@@ -394,6 +398,9 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
         const series = type === 'stacked' ? fieldRef(c.series, ds) : undefined;
         if (type === 'stacked' && !series) continue;
         // (a stacked chart of a rate or average is turned into side-by-side bars by conformSpec below)
+        // a visual named after a requirement the data cannot support is not shown under another measure
+        const title = nameOf(c.title) ?? ms[0].name;
+        if (missingSubjects.some((ws) => ws.length && ws.every((w) => subjectWords(title).includes(w)))) continue;
         const width = ([3, 4, 6, 8, 12].includes(Number(c.width)) ? Number(c.width) : type === 'kpi' ? 3 : type === 'table' || type === 'funnel' || type === 'line' ? 12 : 6) as DashComponent['width'];
         comps.push({ id: uid('cmp'), type, title: nameOf(c.title) ?? ms[0].name, description: nameOf(c.description) ?? '', measureIds: type === 'kpi' || ['bar', 'hbar', 'donut', 'stacked', 'table'].includes(type) && type !== 'table' ? [ms[0].id] : ms.map((m) => m.id), dimension: dim, series, timeGrain: type === 'line' || type === 'area' ? fallback.timeGrain : undefined, comparison: type === 'kpi' ? true : undefined, width, topN: c.topN ? Number(c.topN) : undefined, threshold: c.threshold != null && !Number.isNaN(Number(c.threshold)) ? { op: 'gt', value: Number(c.threshold) } : undefined, section: nameOf(sec.name), tableColumns: type === 'table' ? [] : undefined });
         valid++;

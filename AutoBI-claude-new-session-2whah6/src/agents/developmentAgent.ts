@@ -4,6 +4,7 @@ import { activePeriod } from '@/lib/periodFilter';
 import { designStats } from './designAgent';
 import { clone } from '@/lib/util';
 import { conformSpec, powerBiVisual } from '@/lib/powerbi/support';
+import { missingRequirements } from '@/lib/obtainable';
 import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
 
 /** Dashboard Development Agent: compiles the approved design spec against the data and validates every component. */
@@ -114,7 +115,12 @@ function buildable(input: DashboardSpec, foundation: Foundation, engine: Engine)
 export function buildDashboard(design: DashboardSpec, designVersion: number, u: DataUnderstanding, foundation: Foundation, engine: Engine, prevVersion = 0): DashboardBuild {
   const { spec, notes } = buildable(design, foundation, engine);
   const validations = validateComponents(spec, engine, foundation);
-  const warnings: string[] = [...validations.filter((v) => !v.ok).map((v) => `${v.page} › ${v.title}: ${v.message}`), ...notes.map((n) => `Adjusted for Power BI: ${n}`)];
+  const warnings: string[] = [
+    // requirements the data cannot support are left out of the dashboard (never shown as a near-match)
+    ...missingRequirements(u.mappings).map((m) => `Not in the dashboard — "${m.requirement}" (${m.kind}): ${m.note}`),
+    ...validations.filter((v) => !v.ok).map((v) => `${v.page} › ${v.title}: ${v.message}`),
+    ...notes.map((n) => `Adjusted for Power BI: ${n}`),
+  ];
   for (const r of u.relationships.filter((r) => r.unmatched > 0 && r.status !== 'rejected')) {
     const from = u.profiles.find((p) => p.datasetId === r.fromDataset)?.label;
     const to = u.profiles.find((p) => p.datasetId === r.toDataset)?.label;

@@ -4,6 +4,7 @@ import { findEntityDataset, findField, findStatus } from '@/lib/semantic';
 import { uid } from '@/lib/util';
 import { buildMeasureFromText } from './kpiBuilder';
 import { bindCatalogue } from '@/lib/catalogue';
+import { dataVocabulary, unobtainableReason } from '@/lib/obtainable';
 
 /** Data Intelligence Agent: profiling, understanding, relationships, quality, requirement mapping. */
 
@@ -20,6 +21,7 @@ export function mapRequirements(spec: RequirementSpec, profiles: DatasetProfile[
   const primaryActivity = profiles.find((p) => p.kind === 'activity');
   const catalogue = bindCatalogue({ profiles });
   const label = (id?: string) => profiles.find((p) => p.datasetId === id)?.label;
+  const vocab = dataVocabulary(profiles);
 
   for (const k of spec.kpis) {
     const [metricText, dimText] = k.text.split(/\s+by\s+/i);
@@ -34,6 +36,12 @@ export function mapRequirements(spec: RequirementSpec, profiles: DatasetProfile[
     const cov = catalogue.coverage.find((c) => c.metric.toLowerCase() === want && c.status === 'needs_data');
     if (cov) {
       out.push({ id: uid('map'), requirement: k.text, kind: 'kpi', sources: [], fields: [], status: 'missing', note: `ProcDNA KPI Catalogue metric. ${cov.note}` });
+      continue;
+    }
+    // nothing in the data describes it (no near-match: "Average patient age" is not a count of plans)
+    const why = unobtainableReason(k.text, vocab);
+    if (why) {
+      out.push({ id: uid('map'), requirement: k.text, kind: 'kpi', sources: [], fields: [], status: 'missing', note: `${why} It is left out of the dashboard.` });
       continue;
     }
     const built = buildMeasureFromText(k.text, { profiles, relationships: rels } as unknown as DataUnderstanding, []);
@@ -109,6 +117,11 @@ export function mapRequirements(spec: RequirementSpec, profiles: DatasetProfile[
       if (/period|date|time/i.test(d.text)) {
         const acts = profiles.filter((p) => p.dateField && p.kind === 'activity');
         out.push({ id: uid('map'), requirement: d.text, kind, sources: acts.map((a) => a.label), fields: acts.map((a) => a.dateField!), status: acts.length ? 'available' : 'missing', note: acts.length ? 'Applied to each activity dataset’s event date.' : 'No date fields found in activity data.' });
+        continue;
+      }
+      const why = unobtainableReason(d.text, vocab, { strict: true });
+      if (why) {
+        out.push({ id: uid('map'), requirement: d.text, kind, sources: [], fields: [], status: 'missing', note: `${why} It is left out of the dashboard.` });
         continue;
       }
       const f = findField(d.text, profiles, { roles: ['dimension', 'status', 'attribute', 'foreign_key'], prefer: primaryActivity?.datasetId });

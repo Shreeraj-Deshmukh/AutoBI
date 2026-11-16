@@ -4,6 +4,7 @@ import { CheckCircle2, Save, RefreshCw, Plus, PenTool, History, Trash2, Lock } f
 import type { ComponentType, DashComponent, DashboardSpec, PeriodPreset, Project, TimeGrain } from '@/types';
 import StageLayout from '@/components/StageLayout';
 import Chat from '@/components/Chat';
+import RequirementGaps from '@/components/RequirementGaps';
 import { Button, Callout, Card, Badge, Field, Modal, Empty } from '@/components/ui';
 import Wireframe from '@/dashboard/Wireframe';
 import DashboardView from '@/dashboard/DashboardView';
@@ -71,6 +72,7 @@ export default function DesignStage({ p }: { p: Project }) {
         </span>
       </div>
       {!foundationOk && <Callout tone="warning" title="Reporting foundation not yet approved">You can iterate on the design, but approval requires the reporting foundation to be reviewed and approved first.</Callout>}
+      <RequirementGaps p={p} where="design" />
 
       {view === 'wire' ? (
         <Wireframe spec={spec} foundation={f} pageId={page.id} onPage={setPageId} selected={sel} onSelect={setSel} onChange={change} />
