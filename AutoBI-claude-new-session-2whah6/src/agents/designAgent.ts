@@ -198,7 +198,7 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
       comp({ type: 'kpi', title: f.measures.find((m) => m.datasetId === mst.datasetId && m.kind === 'count')?.name ?? `Total ${plural(mst.entity)}`, measureIds: [f.measures.find((m) => m.datasetId === mst.datasetId && m.kind === 'count')?.id ?? first.id], width: 4 }),
       ...linked.map((a) => measuresOf(f, a.datasetId).reached).filter(Boolean).slice(0, 2).map((m) => comp({ type: 'kpi', title: m!.name, measureIds: [m!.id], comparison, width: 4 })),
       comp({ type: 'hbar', title: `Top 10 ${plural(mst.entity)} by ${first.name.replace(/^Total /, '')}`, measureIds: [first.id], dimension: ref(mst.datasetId, nameCol.name), topN: 10, width: 12 }),
-      comp({ type: 'table', title: `${mst.entity}-Level Performance`, measureIds, dimension: ref(mst.datasetId, nameCol.name), tableColumns: attrs, width: 12, description: 'Searchable, sortable account-level table. Click a row to cross-filter the dashboard.' }),
+      comp({ type: 'table', title: `${mst.entity}-Level Performance`, measureIds, dimension: ref(mst.datasetId, nameCol.name), tableColumns: attrs, width: 12, description: 'Sortable account-level table. Click a row to cross-filter the dashboard.' }),
     ];
     pages.push({ id: uid('pg'), name: `${mst.entity}-Level Performance`, description: `Performance of each ${mst.entity.toLowerCase()} across activity channels.`, components: cs });
   }

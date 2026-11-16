@@ -9,7 +9,7 @@ import type { PowerBiExport } from './index';
 function exportedPerPage(x: PowerBiExport): string[][] {
   const pagesFile = Object.keys(x.files).find((p) => p.endsWith('pages/pages.json'))!;
   const order: string[] = JSON.parse(x.files[pagesFile]).pageOrder;
-  const furniture = ['textbox', 'slicer', 'image', 'pageNavigator'];
+  const furniture = ['textbox', 'slicer', 'image', 'pageNavigator', 'shape'];
   return order.map((name) =>
     Object.entries(x.files)
       .filter(([p]) => p.includes(`/pages/${name}/visuals/`) && p.endsWith('visual.json'))

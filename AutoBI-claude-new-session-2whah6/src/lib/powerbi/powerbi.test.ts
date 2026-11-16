@@ -92,14 +92,14 @@ describe('Power BI export – Sanofi FRM kit', () => {
     const components = r.build.spec.pages.flatMap((p) => p.components);
     const types = visualTypes(x);
     expect(x.warnings.filter((w) => /skipped/.test(w))).toEqual([]);
-    expect(types.filter((t) => !['textbox', 'slicer', 'image', 'pageNavigator'].includes(t))).toHaveLength(components.length);
+    expect(types.filter((t) => !['textbox', 'slicer', 'image', 'pageNavigator', 'shape'].includes(t))).toHaveLength(components.length);
     // per page, as in the web dashboard: the banner and the client logo, and the page tabs
     const pages = r.build.spec.pages.length;
     expect(types.filter((t) => t === 'image')).toHaveLength(2 * pages);
     expect(types.filter((t) => t === 'pageNavigator')).toHaveLength(pages);
     expect(x.files['Sanofi_FRM.Report/StaticResources/RegisteredResources/ClientLogo.svg']).toMatch(/^<\?xml[\s\S]*<svg/);
     expect(x.files['Sanofi_FRM.Report/StaticResources/RegisteredResources/ReportBanner.svg']).toMatch(/^<\?xml[\s\S]*<linearGradient/);
-    const builtIn = ['card', 'multiRowCard', 'pivotTable', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image', 'pageNavigator'];
+    const builtIn = ['card', 'multiRowCard', 'pivotTable', 'clusteredColumnChart', 'clusteredBarChart', 'columnChart', 'donutChart', 'lineChart', 'areaChart', 'scatterChart', 'tableEx', 'decompositionTreeVisual', 'slicer', 'textbox', 'image', 'pageNavigator', 'shape'];
     expect(types.filter((t) => !builtIn.includes(t))).toEqual([]);
   });
 

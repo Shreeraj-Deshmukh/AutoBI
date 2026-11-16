@@ -110,7 +110,7 @@ export function buildFrmLayout(u0: DataUnderstanding, f: Foundation): FrmLayout 
   ].filter((x): x is FieldRef => !!x);
   const escCol = escFlag ? cases.columns.find((c) => `${cases.datasetId}::${c.name}` === escFlag) : undefined;
   const escValue = escCol?.topValues.find((v) => /^(escalated|yes|y|true)$/i.test(v.value))?.value;
-  p1.push(comp({ type: 'records', title: 'Case Overview', measureIds: [total.id], tableColumns: cols, sortBy: own(/^case_?(open|initiation)_?date$/i), toggle: escCol && escValue ? { label: 'Escalated Cases', allLabel: 'Overall Cases', filter: [{ field: escCol.name, op: 'eq', values: [escValue] }] } : undefined, width: 12, section: S3, description: 'Every case opened in the period, newest first. Click a case to see the patient journey.' }));
+  p1.push(comp({ type: 'records', title: 'Case Overview', measureIds: [total.id], tableColumns: cols, sortBy: own(/^case_?(open|initiation)_?date$/i), toggle: escCol && escValue ? { label: 'Escalated Cases', allLabel: 'Overall Cases', filter: [{ field: escCol.name, op: 'eq', values: [escValue] }] } : undefined, width: 12, section: S3, description: 'Every case opened in the period, newest first.' }));
 
   // ── Page 2: FRM Performance (geography deep dive for managers and executives)
   const T1 = 'Scorecard';

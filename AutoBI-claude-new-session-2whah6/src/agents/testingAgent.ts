@@ -77,7 +77,7 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
       if (c.type === 'records') {
         const colNames = (c.tableColumns ?? []).map((x) => fieldLabel(f, x));
         add('Functional', pg, c.title, el, [`1. Verify that ${c.title} lists every record counted by ${m?.name}.`, `2. Check that the columns (${colNames.join(', ')}) are populated${c.toggle ? ` and that "${c.toggle.label}" narrows the list` : ''}.`], `Every ${m?.name?.toLowerCase()} record is listed once with its details${c.toggle ? `; the "${c.toggle.label}" toggle shows only matching records` : ''}.`, { kind: 'records', componentId: c.id }, 'Critical', ds);
-        add('Interactivity', pg, c.title, el, ['1. Click a case in the list.', '2. Verify that the case detail shows the patient journey dates in order and the case attributes.'], 'The case detail opens with the full journey timeline for that patient.', null, 'Medium', ds);
+        if (c.toggle) add('Interactivity', pg, c.title, el, [`1. Select a value in the "${c.toggle.label.replace(/ only$/i, '')}" slicer above the list.`, '2. Verify that only the list narrows and the other visuals on the page do not change.'], `The "${c.toggle.label.replace(/ only$/i, '')}" slicer narrows ${c.title} only.`, null, 'Medium', ds);
         continue;
       }
       if (c.type === 'scatter') {
@@ -92,7 +92,7 @@ export function generateTests(build: DashboardBuild, u: DataUnderstanding, f: Fo
       }
       if (c.type === 'funnel') {
         const names = c.measureIds.map((id) => f.measures.find((x) => x.id === id)?.name).filter(Boolean);
-        add('Functional', pg, c.title, 'Funnel', [`1. Verify that the funnel shows ${names.join(' → ')}.`, '2. Check that each stage count and its share of the first stage are correct.'], 'Each funnel stage matches the source data and percentages are relative to the first stage.', { kind: 'funnel', componentId: c.id }, 'Critical', ds);
+        add('Functional', pg, c.title, 'Funnel', [`1. Verify that the funnel shows one bar per stage: ${names.join(' → ')}.`, '2. Check each stage count against the source data.'], 'Each funnel stage matches the source data.', { kind: 'funnel', componentId: c.id }, 'Critical', ds);
       } else if (['bar', 'hbar', 'donut', 'stacked'].includes(c.type) && c.dimension) {
         const inner = c.subDimension ? ` and, within each, by ${lower(fieldLabel(f, c.subDimension))}` : '';
         add('Functional', pg, c.title, el, [`1. Verify that the ${el.toLowerCase()} displays data for different ${dimName} values${valuesOf(c.dimension)}${inner}.`, `2. Check that the ${c.type === 'donut' ? 'segments' : 'bars'} are correctly colored and labeled.`], `The ${el.toLowerCase()} displays data for different ${dimName} values with correct colors and labels.`, { kind: 'group_recompute', componentId: c.id }, 'High', ds);

@@ -1,11 +1,10 @@
 import type { DashComponent, DashPage, DashboardSpec, FieldRef, Foundation } from '@/types';
-import { CARD_TYPES, cardWeight } from '@/agents/designAgent';
 import { PERIOD_LABELS } from '@/lib/dates';
 import { fieldLabel } from '@/lib/fieldLabels';
-import { CLIENT_THEME } from '@/dashboard/format';
+import { CLIENT_THEME, REPORT } from '@/dashboard/format';
 import { BANNER, BANNER_FILE, LOGO_FILE } from './theme';
-import { hasPeriodFilter } from '@/lib/periodFilter';
 import { axisOf, isMatrix } from '@/lib/engine';
+import { PAGE_W, layoutPage, type Box } from './layout';
 import { DATE_TABLE, PERIOD_COLUMN, PERIOD_PRESETS, PERIOD_TABLE, addFieldParameter, formatOf, type PbiModel } from './model';
 import { daxCol, daxMeasure, daxString, pbirString, shortId } from './names';
 
@@ -27,12 +26,7 @@ export const SCHEMA = {
 /** Theme compatibility stamp (the PBIR schema versions this report is written against). */
 export const THEME_VERSION = { visual: '2.5.0', page: '2.0.0', report: '3.1.0' };
 
-export const PAGE_W = 1280;
-const MARGIN = 16;
-const GAP = 12;
-const COL = (PAGE_W - 2 * MARGIN - 11 * GAP) / 12;
-const span = (cols: number) => cols * COL + (cols - 1) * GAP;
-const INNER = PAGE_W - 2 * MARGIN;
+export { PAGE_W };
 
 type Json = Record<string, unknown>;
 const lit = (v: string) => ({ expr: { Literal: { Value: v } } });
@@ -310,6 +304,8 @@ function chart(visualType: string, queryState: Json, objects: Json, title: strin
 const state = (roles: Record<string, Json[] | Role>) =>
   Object.fromEntries(Object.entries(roles).map(([k, p]) => [k, Array.isArray(p) ? { projections: p } : p] as const).filter(([, p]) => p.projections.length));
 const labelsOn = { labels: [{ properties: { show: TRUE } }] };
+/** legend under the chart, as in the web dashboard */
+const legendBottom = { legend: [{ properties: { show: TRUE, position: lit("'Bottom'") } }] };
 
 function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
   const measures = c.measureIds.map((id) => measureField(ctx, id)).filter((x): x is FieldExpr => !!x);
@@ -389,14 +385,14 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
       const type = c.type === 'bar' ? 'clusteredColumnChart' : c.type === 'hbar' ? 'clusteredBarChart' : 'donutChart';
       const sort = isOrdinalColumn(ctx, dim!) ? sortBy(dim!, 'Ascending') : sortBy(measures[0], 'Descending');
       return {
-        visual: chart(type, state({ Category: catRole(c.dimension, dim!), Y: [projection(measures[0])] }), c.type === 'donut' ? {} : labelsOn, title, sub, sort),
+        visual: chart(type, state({ Category: catRole(c.dimension, dim!), Y: [projection(measures[0])] }), c.type === 'donut' ? legendBottom : labelsOn, title, sub, sort),
         filters: [...(c.topN ? [topNFilter(dim!, measures[0], c.topN)] : []), ...threshold(measures[0])],
       };
     }
     case 'stacked': {
       const series = colField(ctx, c.series);
       // Power BI's internal name for the stacked column chart is "columnChart" ("clusteredColumnChart" is side by side)
-      return { visual: chart('columnChart', state({ Category: catRole(c.dimension, dim!), Series: series ? catRole(c.series, series) : [], Y: [projection(measures[0])] }), {}, title, sub, isOrdinalColumn(ctx, dim!) ? sortBy(dim!, 'Ascending') : undefined) };
+      return { visual: chart('columnChart', state({ Category: catRole(c.dimension, dim!), Series: series ? catRole(c.series, series) : [], Y: [projection(measures[0])] }), { ...labelsOn, ...(series ? legendBottom : {}) }, title, sub, isOrdinalColumn(ctx, dim!) ? sortBy(dim!, 'Ascending') : undefined) };
     }
     case 'line':
     case 'area': {
@@ -406,11 +402,11 @@ function componentVisual(ctx: Ctx, c: DashComponent): VisualSpec | null {
       }
       const grain = c.timeGrain ?? ctx.spec.timeGrain;
       const axis: FieldExpr = { table: DATE_TABLE, property: grain === 'week' ? 'Week Start' : grain === 'quarter' ? 'Quarter' : 'Month', kind: 'Column' };
-      return { visual: chart(c.type === 'line' ? 'lineChart' : 'areaChart', state({ Category: [projection(axis)], Y: measures.map((m) => projection(m)) }), {}, c.title, sub, sortBy(axis, 'Ascending')) };
+      return { visual: chart(c.type === 'line' ? 'lineChart' : 'areaChart', state({ Category: [projection(axis)], Y: measures.map((m) => projection(m)) }), measures.length > 1 ? legendBottom : { legend: [{ properties: { show: FALSE } }] }, c.title, sub, sortBy(axis, 'Ascending')) };
     }
     case 'funnel':
       // one bar per stage measure (Power BI's funnel visual needs a single measure split by a category)
-      return { visual: chart('clusteredBarChart', state({ Y: measures.map((m) => projection(m)) }), labelsOn, c.title, sub) };
+      return { visual: chart('clusteredBarChart', state({ Y: measures.map((m) => projection(m)) }), { ...labelsOn, ...legendBottom }, c.title, sub) };
     case 'scatter': {
       if (measures.length < 2) return null;
       const series = colField(ctx, c.series);
@@ -579,6 +575,21 @@ function pageNavigator(): Json {
   };
 }
 
+/** Light purple band behind the slicer rows (a rectangle shape), as in the web dashboard. */
+function filterBand(): Json {
+  return {
+    visualType: 'shape',
+    objects: {
+      shape: [{ properties: { tileShape: lit("'rectangle'") } }],
+      // shapes take their fill per state, like buttons (the colour is read from the "default" state)
+      fill: [{ properties: { show: TRUE } }, ...['default', 'hover', 'press'].map((id) => ({ properties: { fillColor: color(REPORT.filterBand), transparency: lit('0D') }, selector: { id } }))],
+      outline: [{ properties: { show: FALSE } }, ...['default', 'hover', 'press'].map((id) => ({ properties: { show: FALSE }, selector: { id } }))],
+    },
+    visualContainerObjects: BARE,
+    drillFilterOtherVisuals: true,
+  };
+}
+
 function textbox(paragraphs: { text: string; size: number; bold?: boolean; color?: string }[]): Json {
   return {
     visualType: 'textbox',
@@ -589,8 +600,6 @@ function textbox(paragraphs: { text: string; size: number; bold?: boolean; color
   };
 }
 
-const HEIGHT: Partial<Record<DashComponent['type'], number>> = { kpi: 112, kpiGroup: 124, extremes: 124, hbar: 340, stacked: 320, scatter: 340, table: 420, records: 460, drilldown: 420 };
-
 // ───────────────────────────── pages ─────────────────────────────
 
 function buildPage(ctx: Ctx, index: number): { name: string; files: Record<string, Json>; height: number } {
@@ -599,7 +608,7 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
   const visuals: Placed[] = [];
   const interactions: Json[] = [];
   let z = 0;
-  const place = (key: string, json: Json, pos: { x: number; y: number; width: number; height: number }, filters?: Json[]) => {
+  const place = (key: string, json: Json, pos: Box, filters?: Json[]) => {
     const name = shortId(`visual:${pageName}:${key}:${visuals.length}`);
     visuals.push({
       name,
@@ -614,156 +623,79 @@ function buildPage(ctx: Ctx, index: number): { name: string; files: Record<strin
     return name;
   };
 
-  // banner, as in the web dashboard: purple gradient, logo in a white chip on the left, page tabs centred
-  const chip = BANNER.chip;
-  place('banner', image(BANNER_FILE), { x: 0, y: 0, width: PAGE_W, height: BANNER.height });
-  place('logo', image(LOGO_FILE), { x: chip.x + 8, y: chip.y + 5, width: chip.width - 16, height: chip.height - 10 });
-  if (ctx.spec.pages.length > 1) {
-    // tabs share the banner right of the logo (up to 230 px each), centred in it
-    const left = chip.x + chip.width + GAP;
-    const room = PAGE_W - MARGIN - left;
-    const navW = Math.min(room, ctx.spec.pages.length * 230);
-    place('tabs', pageNavigator(), { x: left + Math.round((room - navW) / 2), y: 0, width: navW, height: BANNER.height });
-  }
-  // page title + description under the banner
-  let y = BANNER.height + GAP;
-  place('title', textbox([{ text: page.name, size: 18, bold: true, color: CLIENT_THEME.primary }, ...(page.description ? [{ text: page.description, size: 10, color: CLIENT_THEME.muted }] : [])]), { x: MARGIN, y, width: INNER, height: page.description ? 64 : 44 });
-  y += (page.description ? 64 : 48) + 8;
-
-  // slicer bar: reporting period, date range and the dashboard filters (synced across pages)
-  const slicers: { json: Json; width: number }[] = [];
-  if (ctx.geo) {
-    const def = colField(ctx, ctx.geo.fields[ctx.geo.defaultIndex]);
-    const fieldsCol: FieldExpr = { table: ctx.geo.param.table, property: `${ctx.geo.param.property} Fields`, kind: 'Column' };
-    slicers.push({ json: slicer(ctx.geo.param, { mode: 'Dropdown', single: true, header: 'Geo Level', ...(def ? { selected: daxCol(def.table, def.property), selectOn: fieldsCol } : {}) }), width: 170 });
-  }
-  // Time Period + Custom Date slicers only when the dashboard has the Time Period filter (otherwise it shows all time)
-  if (ctx.model.hasDates && hasPeriodFilter(ctx.spec)) {
-    const preset = PERIOD_PRESETS.includes(ctx.spec.defaultPeriod) ? PERIOD_LABELS[ctx.spec.defaultPeriod] : undefined;
-    slicers.push({ json: slicer({ table: PERIOD_TABLE, property: PERIOD_COLUMN, kind: 'Column' }, { mode: 'Dropdown', single: true, selected: preset, header: 'Time Period' }), width: 220 });
-    slicers.push({ json: slicer({ table: DATE_TABLE, property: 'Date', kind: 'Column' }, { mode: 'Between', header: 'Custom Date' }), width: 260 });
-  }
-  for (const fd of ctx.spec.filters) {
-    const f = fd.type === 'multi' ? colField(ctx, fd.field) : null;
-    if (fd.type === 'multi' && !f) ctx.warnings.push(`Filter "${fd.label}" was skipped: its field is not in the model.`);
-    if (f) slicers.push({ json: slicer(f, { mode: 'Dropdown', header: fd.label || undefined }), width: 190 });
-  }
-  // tall enough for the header plus the date boxes of the Custom Date (between) slicer
-  const SLICER_H = 76;
-  // wrap into rows by the slicers' natural widths, then stretch each row to the full page width
-  const lines: (typeof slicers)[] = [[]];
-  let used = 0;
-  for (const s of slicers) {
-    if (lines[lines.length - 1].length && used + s.width > INNER) {
-      lines.push([]);
-      used = 0;
-    }
-    lines[lines.length - 1].push(s);
-    used += s.width + GAP;
-  }
-  for (const line of lines.filter((l) => l.length)) {
-    const natural = line.reduce((sum, s) => sum + s.width, 0);
-    const free = INNER - GAP * (line.length - 1);
-    let x = MARGIN;
-    line.forEach((s, i) => {
-      const w = i === line.length - 1 ? MARGIN + INNER - x : Math.floor((free * s.width) / natural);
-      place('slicer', s.json, { x, y, width: w, height: SLICER_H });
-      x += w + GAP;
-    });
-    y += SLICER_H + 8;
-  }
-  if (slicers.length) y += GAP - 8;
-
-  // components: section headings, rows of cards, then the 12-column grid
-  let section: string | undefined;
-  let row: { c: DashComponent; v: VisualSpec }[] = [];
-  let cards: { c: DashComponent; v: VisualSpec }[] = [];
-  const toggles: { slicer: string; list: string }[] = [];
+  // the dashboard filters shown as slicers (synced across pages): those whose field is in the model
+  const filters = ctx.spec.filters.filter((fd) => {
+    if (fd.type !== 'multi') return false;
+    if (!colField(ctx, fd.field)) ctx.warnings.push(`Filter "${fd.label}" was skipped: its field is not in the model.`);
+    return !!colField(ctx, fd.field);
+  });
   const toggleField = (c: DashComponent) => {
     const tf = c.type === 'records' ? c.toggle?.filter[0] : undefined;
     const ds = ctx.model.measureOf.get(c.measureIds[0])?.def.datasetId;
     return tf && ds ? colField(ctx, `${ds}::${tf.field}`) : null;
   };
-  const flushRow = () => {
-    if (!row.length) return;
-    let cx = MARGIN;
-    let bottom = y;
-    // boxes side by side share one height (the tallest), so the row lines up
-    const rowH = Math.max(...row.map((r) => HEIGHT[r.c.type] ?? 300));
-    for (const r of row) {
-      const w = span(r.c.width);
-      const h = rowH;
-      r.v.fit?.(w);
-      const tf = toggleField(r.c);
-      let top = y;
-      let sName: string | undefined;
-      if (tf) {
+  // the same layout as the web dashboard (src/lib/powerbi/layout.ts)
+  const layout = layoutPage(ctx.spec, page, { geo: !!ctx.geo, hasDates: ctx.model.hasDates, filters, hasToggle: (c) => !!toggleField(c) });
+
+  const toggleSlicer = new Map<string, string>();
+  const toggles: { slicer: string; list: string }[] = [];
+  for (const it of layout.items) {
+    switch (it.kind) {
+      case 'banner':
+        place('banner', image(BANNER_FILE), it.box);
+        break;
+      case 'logo':
+        place('logo', image(LOGO_FILE), it.box);
+        break;
+      case 'tabs':
+        place('tabs', pageNavigator(), it.box);
+        break;
+      case 'band':
+        place('band', filterBand(), it.box);
+        break;
+      case 'title':
+        place('title', textbox([{ text: page.name, size: 18, bold: true, color: CLIENT_THEME.primary }, ...(page.description ? [{ text: page.description, size: 10, color: CLIENT_THEME.muted }] : [])]), it.box);
+        break;
+      case 'section':
+        place('section', textbox([{ text: it.text.toUpperCase(), size: 11, bold: true, color: CLIENT_THEME.primary }]), it.box);
+        break;
+      case 'slicer': {
+        const s = it.slot;
+        if (s.kind === 'geo' && ctx.geo) {
+          const def = colField(ctx, ctx.geo.fields[ctx.geo.defaultIndex]);
+          const fieldsCol: FieldExpr = { table: ctx.geo.param.table, property: `${ctx.geo.param.property} Fields`, kind: 'Column' };
+          place('slicer', slicer(ctx.geo.param, { mode: 'Dropdown', single: true, header: 'Geo Level', ...(def ? { selected: daxCol(def.table, def.property), selectOn: fieldsCol } : {}) }), it.box);
+        } else if (s.kind === 'period') {
+          const preset = PERIOD_PRESETS.includes(ctx.spec.defaultPeriod) ? PERIOD_LABELS[ctx.spec.defaultPeriod] : undefined;
+          place('slicer', slicer({ table: PERIOD_TABLE, property: PERIOD_COLUMN, kind: 'Column' }, { mode: 'Dropdown', single: true, selected: preset, header: 'Time Period' }), it.box);
+        } else if (s.kind === 'date') {
+          place('slicer', slicer({ table: DATE_TABLE, property: 'Date', kind: 'Column' }, { mode: 'Between', header: 'Custom Date' }), it.box);
+        } else if (s.kind === 'filter') {
+          place('slicer', slicer(colField(ctx, s.filter.field)!, { mode: 'Dropdown', header: s.filter.label || undefined }), it.box);
+        }
+        break;
+      }
+      case 'toggle': {
         // the case-list toggle becomes a slicer above the list that only narrows the list
-        sName = place('toggle', slicer(tf, { mode: 'Dropdown', header: r.c.toggle!.label.replace(/ only$/i, '') }), { x: cx, y, width: 220, height: SLICER_H });
-        top += SLICER_H + 8;
+        const c = it.component;
+        toggleSlicer.set(c.id, place('toggle', slicer(toggleField(c)!, { mode: 'Dropdown', header: c.toggle!.label.replace(/ only$/i, '') }), it.box));
+        break;
       }
-      const name = place(r.c.id, r.v.visual, { x: cx, y: top, width: w, height: h }, r.v.filters);
-      if (sName) toggles.push({ slicer: sName, list: name });
-      bottom = Math.max(bottom, top + h);
-      cx += w + GAP;
-    }
-    y = bottom + GAP;
-    row = [];
-  };
-  const flushCards = () => {
-    if (!cards.length) return;
-    // flex-wrap like the app: a line holds cards while their minimum widths fit, then shares the width by weight
-    const lines: (typeof cards)[] = [[]];
-    let used = 0;
-    for (const k of cards) {
-      const min = cardWeight(k.c) * 150 + 20;
-      if (lines[lines.length - 1].length && used + min + GAP > INNER) {
-        lines.push([]);
-        used = 0;
+      case 'component': {
+        const c = it.component;
+        const v = componentVisual(ctx, c);
+        if (!v) break;
+        v.fit?.(it.box.width);
+        const name = place(c.id, v.visual, it.box, v.filters);
+        const sName = toggleSlicer.get(c.id);
+        if (sName) toggles.push({ slicer: sName, list: name });
+        break;
       }
-      lines[lines.length - 1].push(k);
-      used += min + GAP;
     }
-    for (const line of lines) {
-      const total = line.reduce((s, k) => s + cardWeight(k.c), 0);
-      const free = INNER - GAP * (line.length - 1);
-      let cx = MARGIN;
-      const h = Math.max(...line.map((k) => HEIGHT[k.c.type] ?? 112));
-      for (const k of line) {
-        const w = Math.floor((free * cardWeight(k.c)) / total);
-        k.v.fit?.(w);
-        place(k.c.id, k.v.visual, { x: cx, y, width: w, height: h }, k.v.filters);
-        cx += w + GAP;
-      }
-      y += h + GAP;
-    }
-    cards = [];
-  };
-  for (const c of page.components) {
-    if (c.section && c.section !== section) {
-      flushCards();
-      flushRow();
-      section = c.section;
-      place('section', textbox([{ text: c.section.toUpperCase(), size: 11, bold: true, color: CLIENT_THEME.primary }]), { x: MARGIN, y, width: INNER, height: 32 });
-      y += 32 + 4;
-    }
-    const v = componentVisual(ctx, c);
-    if (!v) continue;
-    if (CARD_TYPES.includes(c.type)) {
-      flushRow();
-      cards.push({ c, v });
-      continue;
-    }
-    flushCards();
-    const usedCols = row.reduce((s, r) => s + r.c.width, 0);
-    if (usedCols + c.width > 12) flushRow();
-    row.push({ c, v });
   }
-  flushCards();
-  flushRow();
   for (const t of toggles) for (const v of visuals) if (v.name !== t.slicer && v.name !== t.list) interactions.push({ source: t.slicer, target: v.name, type: 'NoFilter' });
 
-  const height = Math.max(720, Math.ceil(y + MARGIN));
+  const height = layout.height;
   const files: Record<string, Json> = {
     [`pages/${pageName}/page.json`]: {
       $schema: SCHEMA.page,
