@@ -5,6 +5,7 @@ import { visibleProfiles, fieldLabel } from '@/lib/fieldLabels';
 import type { Clarification, DashboardSpec, DataUnderstanding, Foundation, ProjectInfo, ReqItem, RequirementSection, RequirementSpec } from '@/types';
 import { chatJSON } from './llm';
 import { applyDesignCommand } from './designAgent';
+import { conformSpec } from '@/lib/powerbi/support';
 import { uid } from '@/lib/util';
 import { FRM_REQUIREMENT_KPIS } from '@/lib/catalogue';
 import { KPI_CATALOGUE } from '@/config/kpiCatalogue';
@@ -348,9 +349,6 @@ function nameOf(v: unknown): string | undefined {
 }
 const namesOf = (v: unknown): string[] => (Array.isArray(v) ? v : v == null ? [] : [v]).map(nameOf).filter((x): x is string => !!x);
 
-/** Measure kinds whose values can be added up across the segments of a stacked chart. */
-const STACKABLE: MeasureDef['kind'][] = ['count', 'countDistinct', 'sum'];
-
 export async function aiGenerateDesign(u0: DataUnderstanding, f: Foundation, spec: RequirementSpec | null, fallback: DashboardSpec, ctx?: AgentContext): Promise<DashboardSpec> {
   const u = { ...u0, profiles: visibleProfiles(u0.profiles, f) };
   const fields = u.profiles.flatMap((p) => p.columns.filter((c) => ['dimension', 'status', 'attribute'].includes(c.role)).map((c) => ({ column: c.name, label: fieldLabel(f, fref(p.datasetId, c.name)), dataset: p.label })));
@@ -387,19 +385,15 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
     for (const sec of Array.isArray(pg?.sections) ? pg.sections : []) {
       for (const c of Array.isArray(sec?.components) ? sec.components : []) {
         if (!c || typeof c !== 'object') continue;
-        let type = String(c.type) as ComponentType;
+        const type = String(c.type) as ComponentType;
         const ms = namesOf(c.measures).map((n) => mByName(n)).filter((m): m is MeasureDef => !!m);
         if (!TYPES.includes(type) || !ms.length) continue;
         const ds = dsOf(ms[0]);
         const dim = fieldRef(c.dimension, ds);
         if (['bar', 'hbar', 'donut', 'table', 'stacked'].includes(type) && !dim) continue;
-        let series = type === 'stacked' ? fieldRef(c.series, ds) : undefined;
+        const series = type === 'stacked' ? fieldRef(c.series, ds) : undefined;
         if (type === 'stacked' && !series) continue;
-        // segments of a stacked chart are added up, so it only works for counts and sums; a rate becomes a plain bar chart
-        if (type === 'stacked' && !STACKABLE.includes(ms[0].kind)) {
-          type = 'bar';
-          series = undefined;
-        }
+        // (a stacked chart of a rate or average is turned into side-by-side bars by conformSpec below)
         const width = ([3, 4, 6, 8, 12].includes(Number(c.width)) ? Number(c.width) : type === 'kpi' ? 3 : type === 'table' || type === 'funnel' || type === 'line' ? 12 : 6) as DashComponent['width'];
         comps.push({ id: uid('cmp'), type, title: nameOf(c.title) ?? ms[0].name, description: nameOf(c.description) ?? '', measureIds: type === 'kpi' || ['bar', 'hbar', 'donut', 'stacked', 'table'].includes(type) && type !== 'table' ? [ms[0].id] : ms.map((m) => m.id), dimension: dim, series, timeGrain: type === 'line' || type === 'area' ? fallback.timeGrain : undefined, comparison: type === 'kpi' ? true : undefined, width, topN: c.topN ? Number(c.topN) : undefined, threshold: c.threshold != null && !Number.isNaN(Number(c.threshold)) ? { op: 'gt', value: Number(c.threshold) } : undefined, section: nameOf(sec.name), tableColumns: type === 'table' ? [] : undefined });
         valid++;
@@ -412,12 +406,13 @@ Return {"pages":[{"name","description","sections":[{"name","components":[{"type"
   pages.unshift(...templated);
   // the ProcDNA FRM report has a fixed filter panel (including the filters held back for the demo storyline,
   // FEATURES.frmHeldBackFilters): keep the template's filters exactly, the model adds none
-  if (templated.length) return { ...fallback, pages, filters: fallback.filters };
+  // every component is kept within what the Power BI export builds (closest match otherwise)
+  if (templated.length) return conformSpec({ ...fallback, pages, filters: fallback.filters }, { foundation: f }).spec;
   const filters: FilterDef[] = [{ id: uid('flt'), label: 'Reporting Period', type: 'period' }];
   for (const name of namesOf(j.filters).slice(0, 6)) {
     const r = fieldRef(name);
     if (r && filters.length < (templated.length ? 9 : 7) && !filters.some((x) => x.field === r)) filters.push({ id: uid('flt'), label: fieldLabel(f, r), type: 'multi', field: r });
   }
   for (const x of fallback.filters) if (x.type === 'multi' && !filters.some((y) => y.field === x.field) && filters.length < 3) filters.push(x);
-  return { ...fallback, pages, filters };
+  return conformSpec({ ...fallback, pages, filters }, { foundation: f }).spec;
 }

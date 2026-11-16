@@ -3,6 +3,7 @@ import { Engine, axisOf, isMatrix, splitRef, emptyFilters } from '@/lib/engine';
 import { activePeriod } from '@/lib/periodFilter';
 import { designStats } from './designAgent';
 import { clone } from '@/lib/util';
+import { conformSpec, powerBiVisual } from '@/lib/powerbi/support';
 import { fieldIncluded, fieldLabel } from '@/lib/fieldLabels';
 
 /** Dashboard Development Agent: compiles the approved design spec against the data and validates every component. */
@@ -16,6 +17,11 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
       const missing = c.measureIds.filter((m) => !engine.measures.has(m));
       if (!c.measureIds.length || missing.length) {
         v(false, missing.length ? `KPI definition(s) no longer exist in the reporting foundation.` : 'No measure bound to this component.');
+        continue;
+      }
+      // safety net: the build is kept within what the Power BI export builds (see conformSpec)
+      if (!powerBiVisual(c)) {
+        v(false, `A ${c.type} visual has no Power BI equivalent, so it can't be exported.`);
         continue;
       }
       const excluded = [...new Set([c.dimension, c.subDimension, c.series, ...(c.tableColumns ?? []), ...(c.levels ?? [])])].filter((x): x is string => !!x && !fieldIncluded(foundation, x));
@@ -97,23 +103,18 @@ export function validateComponents(spec: DashboardSpec, engine: Engine, foundati
   return out;
 }
 
-/** Build-time corrections to a design: a stacked chart of a rate or average (whose segments can't be added up) is built as a bar chart. */
-function buildable(input: DashboardSpec, foundation: Foundation): DashboardSpec {
-  const spec = clone(input);
-  for (const c of spec.pages.flatMap((p) => p.components)) {
-    const kind = foundation.measures.find((m) => m.id === c.measureIds[0])?.kind;
-    if (c.type === 'stacked' && kind && !['count', 'countDistinct', 'sum'].includes(kind)) {
-      c.type = 'bar';
-      c.series = undefined;
-    }
-  }
-  return spec;
+/**
+ * Build-time corrections to a design: every component within what the Power BI export builds (e.g. a stacked chart
+ * of a rate or average becomes side-by-side bars), and split fields that don't link to the measure are dropped.
+ */
+function buildable(input: DashboardSpec, foundation: Foundation, engine: Engine) {
+  return conformSpec(input, { foundation, reaches: (m, f) => engine.applies(m, f) });
 }
 
 export function buildDashboard(design: DashboardSpec, designVersion: number, u: DataUnderstanding, foundation: Foundation, engine: Engine, prevVersion = 0): DashboardBuild {
-  const spec = buildable(design, foundation);
+  const { spec, notes } = buildable(design, foundation, engine);
   const validations = validateComponents(spec, engine, foundation);
-  const warnings: string[] = validations.filter((v) => !v.ok).map((v) => `${v.page} › ${v.title}: ${v.message}`);
+  const warnings: string[] = [...validations.filter((v) => !v.ok).map((v) => `${v.page} › ${v.title}: ${v.message}`), ...notes.map((n) => `Adjusted for Power BI: ${n}`)];
   for (const r of u.relationships.filter((r) => r.unmatched > 0 && r.status !== 'rejected')) {
     const from = u.profiles.find((p) => p.datasetId === r.fromDataset)?.label;
     const to = u.profiles.find((p) => p.datasetId === r.toDataset)?.label;

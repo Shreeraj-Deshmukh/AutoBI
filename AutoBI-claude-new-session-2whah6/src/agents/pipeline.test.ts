@@ -263,7 +263,8 @@ describe('Sanofi FRM case view (ProcDNA FRM report + KPI catalogue)', () => {
     const col = (x?: string) => x?.split('::')[1];
     const shape = (t: string) => { const c = p2.components.find((k) => k.title === t)!; return [c.type, col(c.dimension), c.timeGrain, col(c.subDimension), col(c.series)]; };
     expect(shape('Case Volume by Geography')).toEqual(['stacked', 'Region', undefined, 'Product_Name', 'Case_Status']);
-    expect(shape('First Response Time (Days)')).toEqual(['stacked', undefined, 'month', 'Product_Name', 'Region']);
+    // an average: regions side by side (stacking would add the averages up)
+    expect(shape('First Response Time (Days)')).toEqual(['bar', undefined, 'month', 'Product_Name', 'Region']);
     expect(shape('Case Closure Rate')).toEqual(['bar', undefined, 'month', 'Product_Name', 'Region']);
     expect(shape('Case Load vs Resolution Time')).toEqual(['scatter', 'Region', undefined, undefined, 'Product_Name']);
     expect(r.design.geoLevels).toMatchObject({ fields: ['frm_territories::Region', 'frm_territories::Territory_Name'], default: 'frm_territories::Region', pages: [p2.id] });
@@ -381,16 +382,26 @@ describe('stacked chart of a rate (as an AI design can propose)', () => {
   const design = structuredClone(r.design);
   design.pages[0].components.push({ id: 'stacked_rate', type: 'stacked', title: `${rate.name} by Territory`, description: '', measureIds: [rate.id], dimension: dims[0], series: dims[1], width: 12 });
 
-  it('is built as a bar chart with data instead of an empty visual and a build warning', () => {
+  it('is built as side-by-side bars with data, with a note instead of a failure', () => {
     const build = buildDashboard(design, 1, r.u, r.f, r.engine);
     const c = build.spec.pages[0].components.find((x) => x.id === 'stacked_rate')!;
     expect(c.type).toBe('bar');
     expect(build.validations.find((v) => v.componentId === 'stacked_rate')?.ok).toBe(true);
-    expect(build.warnings.some((w) => w.includes(c.title))).toBe(false);
+    expect(build.warnings.filter((w) => w.includes(c.title))).toEqual([expect.stringMatching(/^Adjusted for Power BI: .*can't be stacked/)]);
   });
 
-  it('the design assistant declines to stack a rate', () => {
-    const res = applyDesignCommand(structuredClone(design), `change ${rate.name} by Territory to stacked`, { u: r.u, f: r.f });
+  it('the design assistant gives the closest match when asked to stack a rate', () => {
+    const bar = structuredClone(design);
+    const k = bar.pages[0].components.find((x) => x.id === 'stacked_rate')!;
+    k.type = 'bar';
+    // with a split field: the split stays, side by side
+    const res = applyDesignCommand(bar, `change ${rate.name} by Territory to stacked`, { u: r.u, f: r.f });
     expect(res.changed).toBe(false);
+    expect(res.reply).toMatch(/^No change: .*side by side/);
+    // without one: it stays a bar chart
+    k.series = undefined;
+    const res2 = applyDesignCommand(bar, `change ${rate.name} by Territory to stacked`, { u: r.u, f: r.f });
+    expect(res2.changed).toBe(false);
+    expect(res2.reply).toMatch(/needs a field to split/);
   });
 });

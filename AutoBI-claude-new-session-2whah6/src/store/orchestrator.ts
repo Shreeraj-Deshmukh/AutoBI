@@ -38,6 +38,7 @@ import { detectIssues, linkStats } from '@/lib/profile';
 import { fillRequirementGaps, measureLogic, reconcileMappings, runFoundation } from '@/agents/foundationAgent';
 import { applyDesignCommand, designStats, generateDesign } from '@/agents/designAgent';
 import { buildDashboard } from '@/agents/developmentAgent';
+import { conformSpec } from '@/lib/powerbi/support';
 import { generateTests } from '@/agents/testingAgent';
 import { runCheck } from '@/agents/validators';
 import { docBasis, generateDocs, summarize } from '@/agents/documentationAgent';
@@ -964,9 +965,12 @@ export async function runDesignAgent(pid: string) {
 }
 
 /** Any edit to an approved design creates a new draft version requiring re-approval. */
-export function updateDesign(pid: string, spec: DashboardSpec, note: string) {
+export function updateDesign(pid: string, spec0: DashboardSpec, note: string) {
   mutate(pid, (p) => {
     if (!p.design) return;
+    // Design Studio edits stay within what the Power BI export builds, like the assistant's (closest match otherwise)
+    const { spec, notes } = conformSpec(spec0, { foundation: p.foundation ?? undefined });
+    if (notes.length) log(p, 'Dashboard Design Agent', 'warning', `Adjusted to what Power BI can show: ${notes.join(' ')}`, 'design');
     if (p.design.status === 'approved') {
       p.design = { spec, version: p.design.version + 1, status: 'draft', savedAt: nowIso() };
       setStage(p, 'design', 'pending_approval');

@@ -10,6 +10,7 @@ import { isCatalogueHelper } from '@/lib/catalogue';
 import { FEATURES } from '@/config/features';
 import { periodFilterDef } from '@/lib/periodFilter';
 import { PERIOD_LABELS } from '@/lib/dates';
+import { conformSpec } from '@/lib/powerbi/support';
 
 /** Dashboard Design Agent: generates and edits a configuration-driven wireframe. */
 
@@ -217,7 +218,9 @@ export function generateDesign(u0: DataUnderstanding, f: Foundation, spec: Requi
   // the FRM report has a fixed filter panel (ProcDNA FRM report layout); in the demo storyline the Time Period
   // filter can be held back for the presenter to add ("Add a time period filter") – it keeps its default period
   const frmFilters = filters.slice(0, 1 + (frm?.filters.length ?? 0)).filter((x) => x.type !== 'period' || !FEATURES.frmHeldBackFilters.includes('period'));
-  return { pages, filters: frm ? frmFilters : filters, defaultPeriod: preset, timeGrain: grain, ...(frm?.geoLevels ? { geoLevels: frm.geoLevels } : {}) };
+  const design: DashboardSpec = { pages, filters: frm ? frmFilters : filters, defaultPeriod: preset, timeGrain: grain, ...(frm?.geoLevels ? { geoLevels: frm.geoLevels } : {}) };
+  // every component is kept within what the Power BI export builds (closest match otherwise)
+  return conformSpec(design, { foundation: f }).spec;
 }
 
 // ───────────────────────── Funnel-style overview ─────────────────────────
@@ -328,7 +331,21 @@ function findPage(spec: DashboardSpec, phrase: string) {
   return spec.pages.map((p) => ({ p, s: tokens(p.name).filter((t) => want.includes(t)).length })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s)[0]?.p;
 }
 
+/**
+ * Applies one design change request, kept within what the Power BI export builds: a request outside the limits
+ * gets the closest match, and the reply says what was substituted.
+ */
 export function applyDesignCommand(input: DashboardSpec, command: string, ctx0: { u: DataUnderstanding; f: Foundation; activePageId?: string }): DesignEditResult {
+  const r = editDesign(input, command, ctx0);
+  if (!r.changed) return r;
+  const { spec, notes } = conformSpec(r.spec, { foundation: ctx0.f });
+  const note = notes.join(' ');
+  // the closest match can be the design as it was (e.g. stacking a rate that has no split field)
+  if (JSON.stringify(spec) === JSON.stringify(input)) return { spec: input, changed: false, reply: note ? `No change: ${note}` : r.reply };
+  return { spec, changed: true, reply: note ? `${r.reply} Adjusted to what Power BI can show: ${note}` : r.reply };
+}
+
+function editDesign(input: DashboardSpec, command: string, ctx0: { u: DataUnderstanding; f: Foundation; activePageId?: string }): DesignEditResult {
   activeFoundation = ctx0.f;
   const ctx = { ...ctx0, u: { ...ctx0.u, profiles: visibleProfiles(ctx0.u.profiles, ctx0.f) } };
   const spec: DashboardSpec = JSON.parse(JSON.stringify(input));
@@ -406,10 +423,8 @@ export function applyDesignCommand(input: DashboardSpec, command: string, ctx0: 
       for (const h of scoped) {
         h.c.type = t;
         if ((t === 'line' || t === 'area') && !h.c.timeGrain) h.c.timeGrain = spec.timeGrain;
-        if (['bar', 'hbar', 'donut', 'stacked', 'table'].includes(t) && !h.c.dimension) return no(`"${h.c.title}" has no category dimension, so it can't become a ${CHART_LABELS[t]}.`);
-        if (t === 'stacked' && !h.c.series) h.c.type = 'bar';
-        const mk = ctx.f.measures.find((x) => x.id === h.c.measureIds[0])?.kind;
-        if (h.c.type === 'stacked' && mk && !['count', 'countDistinct', 'sum'].includes(mk)) return no(`"${h.c.title}" shows a rate or average, which can't be stacked — its segments would not add up. A bar chart shows it correctly.`);
+        if (['bar', 'hbar', 'donut', 'stacked', 'table'].includes(t) && !h.c.dimension && !(h.c.timeGrain && t !== 'table')) return no(`"${h.c.title}" has no category dimension, so it can't become a ${CHART_LABELS[t]}.`);
+        // (a stacked chart without a split field, or of a rate or average, gets the closest match in applyDesignCommand)
       }
       return { spec, changed: true, reply: `Changed ${scoped.map((h) => `"${h.c.title}"`).join(', ')} to ${CHART_LABELS[t]}.` };
     }
