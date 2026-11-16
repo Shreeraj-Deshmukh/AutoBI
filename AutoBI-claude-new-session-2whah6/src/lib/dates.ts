@@ -2,7 +2,7 @@ import type { PeriodPreset, TimeGrain } from '@/types';
 
 const DAY = 86_400_000;
 
-export type DateFormat = 'ISO' | 'ISO datetime' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'DD-MM-YYYY' | 'YYYY/MM/DD' | 'Mon DD, YYYY';
+export type DateFormat = 'ISO' | 'ISO datetime' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'DD-MM-YYYY' | 'YYYY/MM/DD' | 'Mon DD, YYYY' | 'YYYY-MM' | 'Mon YYYY' | 'MM/YYYY' | 'YYYY-Qn';
 
 const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
@@ -28,6 +28,18 @@ export function parseDate(v: unknown): { t: number; format: DateFormat } | null 
   if (m) return mk(+m[3], +m[2] - 1, +m[1], 'DD-MM-YYYY');
   m = /^([A-Za-z]{3})[a-z]* (\d{1,2}),? (\d{4})$/.exec(s);
   if (m && MONTHS[m[1].toLowerCase()] != null) return mk(+m[3], MONTHS[m[1].toLowerCase()], +m[2], 'Mon DD, YYYY');
+  // periods without a day — monthly or quarterly reporting data ("2026-05", "May 2026", "05/2026", "2026-Q2"):
+  // dated on the first day of the period
+  m = /^(\d{4})[-/](\d{1,2})$/.exec(s);
+  if (m) return mk(+m[1], +m[2] - 1, 1, 'YYYY-MM');
+  m = /^([A-Za-z]{3})[a-z]*[ -](\d{4}|\d{2})$/.exec(s);
+  if (m && MONTHS[m[1].toLowerCase()] != null) return mk(m[2].length === 2 ? 2000 + +m[2] : +m[2], MONTHS[m[1].toLowerCase()], 1, 'Mon YYYY');
+  m = /^(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) return mk(+m[2], +m[1] - 1, 1, 'MM/YYYY');
+  m = /^(\d{4})[- ]?Q([1-4])$/i.exec(s);
+  if (m) return mk(+m[1], (+m[2] - 1) * 3, 1, 'YYYY-Qn');
+  m = /^Q([1-4])[- ](\d{4})$/i.exec(s);
+  if (m) return mk(+m[2], (+m[1] - 1) * 3, 1, 'YYYY-Qn');
   return null;
 }
 

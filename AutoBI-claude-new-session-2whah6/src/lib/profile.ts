@@ -9,7 +9,7 @@ const KEYISH_RE = /(^|_)(sku|code|number|no|num|nbr|ref|reference|key|id)$/i;
 /** Line / sequence counters inside a record: neither a key nor something to slice or sum by. */
 const LINE_RE = /^(line|row|seq|sequence|item|position|pos)(_?(no|num|number|nbr|id|seq))?$/i;
 /** Dates that describe a master record (when it was created / hired / launched) rather than a business event. */
-export const ATTRIBUTE_DATE_RE = /(onboard|hire|launch|birth|(^|_)dob($|_)|join|sign_?up|registr|created|creation|established|founded|expir|effective|valid_|modified|updated)/i;
+export const ATTRIBUTE_DATE_RE = /((^|_)(first|last|initial)_|onboard|hire|launch|birth|(^|_)dob($|_)|join|sign_?up|registr|created|creation|established|founded|expir|effective|valid_|modified|updated)/i;
 
 export function profileColumns(rows: Row[], columns: string[]): ColumnProfile[] {
   const n = rows.length;
@@ -231,6 +231,11 @@ export function classifyDatasets(profiles: DatasetProfile[], rels: Relationship[
     } else if (hasDate && p.primaryKey) {
       kind = 'activity';
       reasons.push(`each row has a unique ${p.primaryKey} and a date (${p.dateField})`);
+    } else if (hasDate && p.columns.some((c) => c.role === 'measure')) {
+      // periodic summary (e.g. one row per month and region): no row id, but dated numbers — reported like a fact table
+      kind = 'activity';
+      const grain = p.columns.filter((c) => c.role === 'dimension' || c.role === 'status').map((c) => c.name).slice(0, 3);
+      reasons.push(`each row holds the figures for one ${p.dateField}${grain.length ? ` and ${grain.join(' / ')}` : ''}`, 'it is a periodic summary rather than a list of individual records');
     } else if (p.primaryKey) {
       kind = 'reference';
       reasons.push(`${p.primaryKey} is unique and the table has no dated events`);
