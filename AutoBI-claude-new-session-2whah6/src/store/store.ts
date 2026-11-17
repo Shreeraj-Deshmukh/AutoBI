@@ -18,6 +18,22 @@ interface State {
   markSeeded: (version: number) => void;
 }
 
+/**
+ * Storage key, prefixed "autobi-" because the app shares a domain (and so one
+ * browser storage area) with other apps. Projects saved under the earlier name
+ * are copied across once; the old entry is left in place.
+ */
+const STORE_KEY = 'autobi-v1';
+const LEGACY_STORE_KEY = 'celestra-v1';
+try {
+  if (localStorage.getItem(STORE_KEY) == null) {
+    const legacy = localStorage.getItem(LEGACY_STORE_KEY);
+    if (legacy != null) localStorage.setItem(STORE_KEY, legacy);
+  }
+} catch {
+  /* no localStorage (tests, private mode): nothing to carry over */
+}
+
 export const useStore = create<State>()(
   persist(
     (set) => ({
@@ -34,7 +50,7 @@ export const useStore = create<State>()(
       markSeeded: (version) => set({ seeded: true, seedVersion: version }),
     }),
     {
-      name: 'celestra-v1',
+      name: STORE_KEY,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ projects: s.projects, seeded: s.seeded, seedVersion: s.seedVersion }),
       // forward-compatibility for projects saved by earlier versions

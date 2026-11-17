@@ -18,7 +18,7 @@ interface AIState {
   setEnabled: (v: boolean) => void;
 }
 
-const PREF = 'celestra-ai-enabled';
+const PREF = 'autobi-ai-enabled';
 const readPref = () => {
   try {
     return localStorage.getItem(PREF) !== 'false';

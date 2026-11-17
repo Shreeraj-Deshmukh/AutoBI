@@ -16,7 +16,7 @@ function retailFiles() {
 
 // skip the agents' pacing (realistic step timing) so the suite runs quickly
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('celestra-fast', '1'));
+  await page.addInitScript(() => localStorage.setItem('autobi-fast', '1'));
 });
 
 async function waitIdle(page: Page) {

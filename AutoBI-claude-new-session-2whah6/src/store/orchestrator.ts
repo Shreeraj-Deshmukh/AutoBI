@@ -153,10 +153,10 @@ function agentContext(p: Project, history?: ChatMessage[]): AgentContext {
 }
 
 // ───────────────────────────── pacing ─────────────────────────────
-/** Automated test runs set localStorage "celestra-fast" = "1" to skip the pacing below. */
+/** Automated test runs set localStorage "autobi-fast" = "1" to skip the pacing below. */
 const fastMode = () => {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem('celestra-fast') === '1';
+    return typeof localStorage !== 'undefined' && localStorage.getItem('autobi-fast') === '1';
   } catch {
     return false;
   }

@@ -30,7 +30,7 @@ export function Logo({ compact, light }: { compact?: boolean; light?: boolean })
   );
 }
 
-const PREF = 'celestra-sidebar-collapsed';
+const PREF = 'autobi-sidebar-collapsed';
 const readCollapsed = () => {
   try {
     return localStorage.getItem(PREF) !== 'false';

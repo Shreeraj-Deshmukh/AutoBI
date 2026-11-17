@@ -1,4 +1,4 @@
-import { get, set, del } from 'idb-keyval';
+import { get, set, del, createStore, type UseStore } from 'idb-keyval';
 import type { Row } from '@/types';
 import { generateSampleData } from './sampleData';
 
@@ -6,7 +6,14 @@ import { generateSampleData } from './sampleData';
  * Dataset rows live outside the (localStorage-persisted) project state, because
  * they can be large. Uploaded rows are persisted to IndexedDB; synthetic sample
  * rows are regenerated deterministically on demand.
+ *
+ * They are kept in a database of their own ("autobi"), not idb-keyval's shared
+ * default one, because the app shares a domain with other apps. Rows saved in
+ * the default database by earlier versions are read from there and copied across.
  */
+let db: UseStore | undefined;
+/** Opened on first use: creating it opens IndexedDB, which tests in Node do not have. */
+const rowsDb = () => (db ??= createStore('autobi', 'rows'));
 const mem = new Map<string, Row[]>();
 const listeners = new Set<() => void>();
 let version = 0;
@@ -39,7 +46,7 @@ export async function putRows(id: string, rows: Row[]) {
   version++;
   if (!id.startsWith(SAMPLE_PREFIX)) {
     try {
-      await set(`rows:${id}`, rows);
+      await set(`rows:${id}`, rows, rowsDb());
     } catch {
       /* IndexedDB unavailable – rows remain in memory for this session */
     }
@@ -50,7 +57,8 @@ export async function putRows(id: string, rows: Row[]) {
 export async function deleteRows(id: string) {
   mem.delete(id);
   try {
-    await del(`rows:${id}`);
+    await del(`rows:${id}`, rowsDb());
+    await del(`rows:${id}`); // a copy an earlier version left in the default database
   } catch {
     /* ignore */
   }
@@ -63,7 +71,12 @@ export async function loadRows(ids: string[]) {
   for (const id of ids) {
     if (hasRows(id)) continue;
     try {
-      const rows = (await get(`rows:${id}`)) as Row[] | undefined;
+      let rows = (await get(`rows:${id}`, rowsDb())) as Row[] | undefined;
+      if (!rows) {
+        // saved by an earlier version in idb-keyval's default database: copy it across
+        rows = (await get(`rows:${id}`)) as Row[] | undefined;
+        if (rows) await set(`rows:${id}`, rows, rowsDb()).catch(() => undefined); // still shown if the copy fails
+      }
       if (rows) {
         mem.set(id, rows);
         changed = true;
