@@ -14,9 +14,25 @@ function retailFiles() {
   ];
 }
 
-// skip the agents' pacing (realistic step timing) so the suite runs quickly
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('autobi-fast', '1'));
+// skip the agents' pacing (realistic step timing) so the suite runs quickly, and start signed in
+test.beforeEach(async ({ page }, info) => {
+  await page.addInitScript((signedIn) => {
+    localStorage.setItem('autobi-fast', '1');
+    if (signedIn) {
+      localStorage.setItem('autobi-session', JSON.stringify({ name: 'Demo user', method: 'demo', signedInAt: new Date().toISOString() }));
+    }
+  }, !info.title.startsWith('sign-in'));
+});
+
+test('sign-in page gates the app and returns to the page asked for', async ({ page }) => {
+  await page.goto('/#/projects');
+  await expect(page).toHaveURL(/#\/login$/);
+  await page.getByRole('button', { name: 'Sign in with Microsoft' }).click();
+  await expect(page).toHaveURL(/#\/projects$/);
+  await page.reload();
+  await expect(page).toHaveURL(/#\/projects$/);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in with Microsoft' })).toBeVisible();
 });
 
 async function waitIdle(page: Page) {

@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { FolderKanban, PlusCircle, Sparkles, Menu, X, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
+import { FolderKanban, PlusCircle, Sparkles, Menu, X, PanelLeftOpen, PanelLeftClose, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cx, Toasts } from './ui';
 import { useAI } from '@/agents/llm';
 import { useStore } from '@/store/store';
+import { initials, useAuth } from '@/store/auth';
 
 const NAV = [
   { to: '/projects', label: 'Projects', icon: FolderKanban },
@@ -56,6 +57,31 @@ function AIStatus({ collapsed }: { collapsed?: boolean }) {
       </div>
       <div className="mt-0.5 truncate text-slate-400">{on ? ai.model : ai.status === 'ready' ? 'AI disabled' : 'AI model not connected'}</div>
     </NavLink>
+  );
+}
+
+function UserChip({ collapsed }: { collapsed?: boolean }) {
+  const user = useAuth((s) => s.user);
+  const signOut = useAuth((s) => s.signOut);
+  if (!user) return null;
+  const avatar = <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[0.6875rem] font-semibold text-white">{initials(user.name)}</span>;
+  if (collapsed)
+    return (
+      <button onClick={signOut} title={`${user.name} · Sign out`} aria-label="Sign out" className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/5">
+        {avatar}
+      </button>
+    );
+  return (
+    <div className="mx-3 mb-3 flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+      {avatar}
+      <div className="min-w-0 flex-1 text-[0.6875rem]">
+        <div className="truncate font-medium text-white">{user.name}</div>
+        <div className="truncate text-slate-400">{user.email ?? (user.method === 'demo' ? 'Signed in (SSO pending)' : 'Signed in')}</div>
+      </div>
+      <button onClick={signOut} title="Sign out" aria-label="Sign out" className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-white">
+        <LogOut className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 
@@ -121,6 +147,7 @@ export default function Layout() {
           </div>
         ))}
       <AIStatus collapsed={mini} />
+      <UserChip collapsed={mini} />
       <button onClick={toggle} className={cx('mb-3 hidden items-center gap-2 rounded-lg py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white lg:flex', mini ? 'mx-auto justify-center px-2.5' : 'mx-3 px-3')} aria-label={mini ? 'Expand sidebar' : 'Collapse sidebar'} title={mini ? 'Expand sidebar' : 'Collapse sidebar'}>
         {mini ? <PanelLeftOpen className="h-4 w-4" /> : <><PanelLeftClose className="h-4 w-4" />Collapse</>}
       </button>
