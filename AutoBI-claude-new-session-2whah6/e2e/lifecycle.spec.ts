@@ -71,8 +71,17 @@ test('full lifecycle on a new project with uploaded data', async ({ page }) => {
   await expect(page).toHaveURL(/design/);
   await waitIdle(page);
   await expect(page.getByTestId('wireframe')).toBeVisible();
-  await page.getByPlaceholder('Modify this dashboard design…').fill('Add a format filter');
+  await page.getByPlaceholder('Modify the design, or ask about a KPI…').fill('Add a format filter');
   await page.keyboard.press('Enter');
+  await expect(page.getByTestId('wf-filter').filter({ hasText: 'Format' })).toBeVisible();
+  // a question about a KPI is answered in the same chat and leaves the design as it is
+  await waitIdle(page);
+  const versions = await page.getByRole('button', { name: /^Versions \(\d+\)$/ }).textContent();
+  await page.getByPlaceholder('Modify the design, or ask about a KPI…').fill('How is Total Amount calculated?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText(/How it's calculated: /).first()).toBeVisible();
+  await waitIdle(page);
+  await expect(page.getByRole('button', { name: versions! })).toBeVisible();
   await expect(page.getByTestId('wf-filter').filter({ hasText: 'Format' })).toBeVisible();
   await page.getByRole('button', { name: 'Approve Design & Start Development' }).click();
 

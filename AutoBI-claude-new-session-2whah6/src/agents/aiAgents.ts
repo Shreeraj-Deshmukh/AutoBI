@@ -232,6 +232,37 @@ export async function aiDesignEdit(spec: DashboardSpec, request: string, ctx: { 
   return { spec: cur, changed, reply: commands.length ? replies.join(' ') : "I couldn't map that request to a change supported by the available data." };
 }
 
+/**
+ * KPI explainer: which of the dashboard's KPIs a loosely worded question is about. Only names from the list are
+ * accepted; anything else the model returns is ignored.
+ */
+export async function aiPickKpis(question: string, names: string[]): Promise<string[]> {
+  const j = await chatJSON<{ kpis?: unknown }>(
+    'You are the Dashboard Design Agent. The user asks about the KPIs of their dashboard. Pick the KPIs the question is about (at most 3), using ONLY names from the list, copied exactly. Return {"kpis": []} when none fits.',
+    `KPIs:\n${names.join('\n')}\n\nQuestion: ${question}`,
+    { maxTokens: 300 },
+  );
+  const byName = new Map(names.map((n) => [n.toLowerCase(), n]));
+  return [...new Set(strs(j.kpis, 3).map((s) => byName.get(s.toLowerCase())).filter((x): x is string => !!x))];
+}
+
+/**
+ * KPI explainer: a one- or two-sentence direct answer to the question, from the explanation built by code (the KPI's
+ * definition, formula and catalogue reference; never data rows). Returns null when the model adds anything that is
+ * not in the facts (any number not in them) or has nothing to add.
+ */
+export async function aiKpiLead(question: string, facts: string): Promise<string | null> {
+  const j = await chatJSON<{ answer?: unknown }>(
+    'You explain dashboard KPIs to business users. Answer the question in one or two plain sentences, using ONLY the facts given. Never add numbers, values, or facts that are not in the facts. If the facts already answer it fully or do not answer it, return {"answer": ""}. Return {"answer": "..."}.',
+    `Facts:\n${facts}\n\nQuestion: ${question}`,
+    { maxTokens: 300 },
+  );
+  const a = typeof j.answer === 'string' ? j.answer.trim() : '';
+  if (!a || a.length > 400) return null;
+  if ((a.match(/\d+(?:\.\d+)?/g) ?? []).some((n) => !facts.includes(n))) return null;
+  return a;
+}
+
 export async function aiExecutiveSummary(facts: Record<string, unknown>): Promise<string> {
   const j = await chatJSON<{ summary?: string }>(
     `You are the Documentation Agent. ${STANDARD}\nWrite a concise executive summary (120–180 words, plain prose, no headings) of this reporting project for business stakeholders, using only the facts given: what the dashboard is for and who uses it, what it measures and from which data, what testing showed (state failures and open defects plainly, with numbers), and what remains before release. Return {"summary": "..."}.`,

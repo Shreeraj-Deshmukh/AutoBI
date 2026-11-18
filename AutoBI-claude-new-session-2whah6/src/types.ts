@@ -145,6 +145,8 @@ export interface ChatMessage {
   at: string;
   options?: string[];
   clarificationId?: string;
+  /** Design assistant: the message the options refer to (an unclear request: explain it or change the design). */
+  request?: string;
 }
 
 // ── Data ingestion & profiling ────────────────────────────────────────────

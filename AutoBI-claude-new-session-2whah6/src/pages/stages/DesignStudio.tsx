@@ -7,7 +7,7 @@ import Chat from '@/components/Chat';
 import { Button, Callout, Card, Badge, Field, Modal, Empty } from '@/components/ui';
 import Wireframe from '@/dashboard/Wireframe';
 import DashboardView from '@/dashboard/DashboardView';
-import { approveDesign, designCommand, isRunning, runDesignAgent, saveDesignDraft, updateDesign } from '@/store/orchestrator';
+import { approveDesign, designChatOption, designCommand, isRunning, runDesignAgent, saveDesignDraft, updateDesign } from '@/store/orchestrator';
 import { CHART_LABELS, TEMPLATE_TYPES, designStats } from '@/agents/designAgent';
 import { useEngine } from '@/store/engineCache';
 import { PERIOD_LABELS } from '@/lib/dates';
@@ -154,7 +154,7 @@ export default function DesignStage({ p }: { p: Project }) {
           <Button size="sm" variant="subtle" className="w-full" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdding(true)}>Add component to “{page.name}”</Button>
         </Card>
       )}
-      <Chat title="Design assistant" messages={p.designChat} busy={busy} placeholder="Modify this dashboard design…" onSend={(t) => designCommand(p.id, t, page.id)} suggestions={spec.pages.some((x) => x.template === 'frm') ? ['Add a specialty filter', 'Make Open Case Aging full width', 'Rename Priority Prescribers to Priority HCPs'] : ['Add a weekly comparison', 'Remove the state filter', 'Replace the pie chart with a bar chart']} />
+      <Chat title="Design assistant" messages={p.designChat} busy={busy} placeholder="Modify the design, or ask about a KPI…" onSend={(t) => designCommand(p.id, t, page.id)} onOption={(m, o) => designChatOption(p.id, m, o, page.id)} suggestions={spec.pages.some((x) => x.template === 'frm') ? ['Add a specialty filter', 'How is Case Closure Rate calculated?', 'Make Open Case Aging full width', 'Rename Priority Prescribers to Priority HCPs'] : ['Add a weekly comparison', 'Which KPIs are on this page?', 'Remove the state filter', 'Replace the pie chart with a bar chart']} />
     </>
   );
 

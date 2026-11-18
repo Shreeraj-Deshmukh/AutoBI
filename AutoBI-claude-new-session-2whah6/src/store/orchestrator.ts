@@ -30,7 +30,8 @@ import { getProject, mutate, useStore } from './store';
 import { engineFor } from './engineCache';
 import { agentMeta, STAGES } from '@/agents/registry';
 import { DETERMINISTIC, aiActive, engineLabel, withAI, type AIResult } from '@/agents/llm';
-import { aiDefineMeasure, aiDescribeData, aiDesignEdit, aiExecutiveSummary, aiExtractRequirements, aiGenerateDesign, aiProposeMeasures, aiRespond, type AgentContext } from '@/agents/aiAgents';
+import { aiDefineMeasure, aiDescribeData, aiDesignEdit, aiExecutiveSummary, aiExtractRequirements, aiGenerateDesign, aiKpiLead, aiPickKpis, aiProposeMeasures, aiRespond, type AgentContext } from '@/agents/aiAgents';
+import { classifyDesignMessage, explainKpiQuestion, findKpis, wantsDax, type KpiContext } from '@/agents/kpiExplainer';
 import { buildMeasureFromText } from '@/agents/kpiBuilder';
 import { applyClarification, extractRequirements, respondToMessage } from '@/agents/requirementAgent';
 import { mapRequirements, runDataIntelligence } from '@/agents/dataAgent';
@@ -990,12 +991,110 @@ export function updateDesign(pid: string, spec0: DashboardSpec, note: string) {
   });
 }
 
+/**
+ * A Design assistant message: a design edit (as before), a question about the KPIs (answered, the design is not
+ * changed), or unclear (the user picks with two buttons).
+ */
 export async function designCommand(pid: string, text: string, activePageId?: string) {
+  const p = getProject(pid)!;
+  if (!p.design || !p.understanding || !p.foundation) return;
+  const kctx: KpiContext = { u: p.understanding, f: p.foundation, spec: p.design.spec, activePageId };
+  const intent = classifyDesignMessage(text, kctx);
+  if (intent === 'question') return answerKpiQuestion(pid, text, activePageId);
+  if (intent === 'unclear') {
+    const kpi = findKpis(text, kctx)[0];
+    mutate(pid, (pp) => {
+      pp.designChat.push({ id: uid('msg'), role: 'user', at: nowIso(), text });
+      pp.designChat.push({ id: uid('msg'), role: 'agent', at: nowIso(), text: `Do you want me to explain ${kpi ? kpi.name : 'this KPI'}, or change the design?`, options: [EXPLAIN_OPTION, CHANGE_OPTION], request: text });
+    });
+    return;
+  }
+  return runDesignEdit(pid, text, activePageId);
+}
+
+const EXPLAIN_OPTION = 'Explain it';
+const CHANGE_OPTION = 'Change the design';
+
+/** The user picked a button under an unclear Design assistant request. */
+export function designChatOption(pid: string, m: ChatMessage, option: string, activePageId?: string) {
+  if (!m.request) return;
+  const request = m.request;
+  mutate(pid, (pp) => {
+    pp.designChat.push({ id: uid('msg'), role: 'user', at: nowIso(), text: option });
+    // the buttons are answered once
+    const msg = pp.designChat.find((x) => x.id === m.id);
+    if (msg) msg.options = undefined;
+  });
+  return option === EXPLAIN_OPTION ? answerKpiQuestion(pid, request, activePageId, false) : runDesignEdit(pid, request, activePageId, false);
+}
+
+/** Power BI DAX of every exported measure ("Name = expression"), for "show the DAX" questions. Loaded on demand. */
+async function daxOf(p: Project): Promise<Record<string, string> | undefined> {
+  try {
+    const { projectExport } = await import('@/lib/powerbi');
+    const { model } = projectExport(p);
+    const out: Record<string, string> = {};
+    for (const [id, v] of model.measureOf) {
+      const e = model.table(v.table)?.measures.find((k) => k.name === v.name)?.expression;
+      if (e) out[id] = `${v.name} = ${e}`;
+    }
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Answers a question about the KPIs in the Design assistant. Read-only: the design is never changed. */
+async function answerKpiQuestion(pid: string, text: string, activePageId?: string, echo = true) {
+  const p = getProject(pid)!;
+  if (!p.design || !p.understanding || !p.foundation) return;
+  const kctx: KpiContext = { u: p.understanding, f: p.foundation, spec: structuredClone(p.design.spec), activePageId };
+  const runId = uid('run');
+  mutate(pid, (pp) => {
+    if (echo) pp.designChat.push({ id: uid('msg'), role: 'user', at: nowIso(), text });
+    pp.runs.unshift({ id: runId, agentId: 'design', startedAt: nowIso(), status: 'running', engine: engineLabel(), steps: [{ label: 'Explaining KPI', status: 'running' }], inputs: ['KPI question', 'Reporting Foundation', `Wireframe v${pp.design!.version}`], outputs: [], warnings: [], errors: [] });
+  });
+  let engine = DETERMINISTIC;
+  let aiError: string | undefined;
+  // the AI only picks a KPI from the project's list when the wording matched none
+  let kpis = findKpis(text, kctx, { alsoClose: true });
+  if (!kpis.length && aiActive()) {
+    try {
+      const names = await aiPickKpis(text, p.foundation.measures.map((m) => m.name));
+      kpis = names.map((n) => p.foundation!.measures.find((m) => m.name === n)).filter((m): m is MeasureDef => !!m);
+      engine = engineLabel();
+    } catch (e) {
+      aiError = (e as Error).message;
+    }
+  }
+  const answer = explainKpiQuestion(text, kctx, { kpis: kpis.length ? kpis : undefined, dax: wantsDax(text) ? await daxOf(p) : undefined });
+  let reply = answer.reply;
+  // an optional one-line direct answer, from the explanation only (checked: no numbers that are not in it)
+  if (answer.kind === 'definition' && !answer.direct && aiActive()) {
+    try {
+      const lead = await aiKpiLead(text, answer.reply);
+      if (lead) reply = `${lead}\n\n${reply}`;
+      engine = engineLabel();
+    } catch (e) {
+      aiError = (e as Error).message;
+    }
+  }
+  mutate(pid, (pp) => {
+    pp.designChat.push({ id: uid('msg'), role: 'agent', at: nowIso(), text: reply });
+    const r = pp.runs.find((x) => x.id === runId)!;
+    Object.assign(r, { finishedAt: nowIso(), status: 'completed', summary: `KPI question: "${text}"${answer.kpis.length ? ` → ${answer.kpis.map((m) => m.name).join(', ')}` : ''}`, outputs: [] });
+    r.steps = [{ label: 'Explaining KPI', status: 'done' }];
+    stamp(r, { engine, aiError });
+  });
+}
+
+/** A design change request from the Design assistant (rules, or the AI translating it into edit commands). */
+async function runDesignEdit(pid: string, text: string, activePageId?: string, echo = true) {
   const p = getProject(pid)!;
   if (!p.design || !p.understanding || !p.foundation) return;
   const runId = uid('run');
   mutate(pid, (pp) => {
-    pp.designChat.push({ id: uid('msg'), role: 'user', at: nowIso(), text });
+    if (echo) pp.designChat.push({ id: uid('msg'), role: 'user', at: nowIso(), text });
     pp.runs.unshift({ id: runId, agentId: 'design', startedAt: nowIso(), status: 'running', engine: engineLabel(), steps: [{ label: 'Interpreting change request', status: 'running' }, { label: 'Updating wireframe', status: 'pending' }], inputs: ['Design change request', `Wireframe v${pp.design!.version}`], outputs: [], warnings: [], errors: [] });
   });
   const ctx = { u: p.understanding, f: p.foundation, activePageId };
