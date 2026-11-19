@@ -44,8 +44,11 @@ export function chatUrl(c: AzureConfig) {
   return `${base}/chat/completions?api-version=${c.apiVersion ?? '2024-05-01-preview'}`;
 }
 
+/** Text, or text and images; images are only accepted inline (data:image/... URLs), never as links to fetch. */
+type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: string } };
+
 export interface ChatRequest {
-  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+  messages: { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] }[];
   temperature?: number;
   maxTokens?: number;
 }
@@ -102,6 +105,13 @@ export async function callAzure(c: AzureConfig, req: ChatRequest) {
   throw Object.assign(new Error('Azure AI Foundry rejected the request parameters.'), { status: 400 });
 }
 
+const MAX_BODY = 12_000_000;
+
+/** Images must be inline data URLs: a link would make Azure fetch whatever it points to. */
+export function hasOnlyInlineImages(messages: ChatRequest['messages']): boolean {
+  return messages.every((m) => typeof m.content === 'string' || (Array.isArray(m.content) && m.content.every((p) => p?.type === 'text' || (p?.type === 'image_url' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(String(p.image_url?.url))))));
+}
+
 function readBody(req: IncomingMessage): Promise<string> {
   // Vercel functions hand over an already-parsed body; Vite's server gives the raw stream
   const pre = (req as IncomingMessage & { body?: unknown }).body;
@@ -110,7 +120,8 @@ function readBody(req: IncomingMessage): Promise<string> {
     let data = '';
     req.on('data', (chunk) => {
       data += chunk;
-      if (data.length > 2_000_000) reject(new Error('Request too large'));
+      // room for a few screenshots (sent as base64 by the browser, after shrinking)
+      if (data.length > MAX_BODY) reject(Object.assign(new Error('Request too large'), { status: 413 }));
     });
     req.on('end', () => resolve(data));
     req.on('error', reject);
@@ -135,6 +146,7 @@ export function aiMiddleware(env: Record<string, string | undefined>): Connect.N
         if (!cfg) return send(res, 503, { error: 'Azure AI Foundry is not configured on the server (set AZURE_AI_ENDPOINT, AZURE_AI_API_KEY, AZURE_AI_MODEL).' });
         const body = JSON.parse((await readBody(req)) || '{}') as ChatRequest;
         if (!Array.isArray(body.messages) || !body.messages.length) return send(res, 400, { error: 'messages[] is required' });
+        if (!hasOnlyInlineImages(body.messages)) return send(res, 400, { error: 'Images must be sent inline as data:image/... URLs.' });
         return send(res, 200, await callAzure(cfg, body));
       }
       return send(res, 404, { error: 'Unknown AI route' });
