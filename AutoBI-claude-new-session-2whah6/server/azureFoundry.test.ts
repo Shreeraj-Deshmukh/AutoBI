@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { chatUrl, readConfig } from './azureFoundry';
+import { chatUrl, hasOnlyInlineImages, readConfig } from './azureFoundry';
+
+describe('images in chat requests', () => {
+  const img = (url: string) => [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'Describe' }, { type: 'image_url' as const, image_url: { url } }] }];
+  it('plain text messages are accepted as before', () => {
+    expect(hasOnlyInlineImages([{ role: 'system', content: 'x' }, { role: 'user', content: 'y' }])).toBe(true);
+  });
+  it('inline screenshots are accepted', () => {
+    expect(hasOnlyInlineImages(img('data:image/jpeg;base64,/9j/4AAQ'))).toBe(true);
+    expect(hasOnlyInlineImages(img('data:image/png;base64,iVBORw0KGgo'))).toBe(true);
+  });
+  it('links to images are refused (Azure would fetch them)', () => {
+    expect(hasOnlyInlineImages(img('https://example.com/a.png'))).toBe(false);
+    expect(hasOnlyInlineImages(img('data:text/html;base64,PGgxPg=='))).toBe(false);
+    expect(hasOnlyInlineImages([{ role: 'user', content: [{ type: 'file', file: {} }] as never }])).toBe(false);
+  });
+});
 
 describe('Azure AI Foundry config', () => {
   it('requires endpoint, key and model', () => {

@@ -6,6 +6,7 @@ import PageHeader from '@/components/PageHeader';
 import { analyseRequirements, createProject } from '@/store/orchestrator';
 import type { ProjectInfo } from '@/types';
 import { SHOWN_KITS as DEMO_KITS } from '@/lib/demoKits';
+import MockupUpload from '@/components/MockupUpload';
 
 const EMPTY: ProjectInfo = { name: '', client: '', domain: '', objective: '', audience: '', problem: '', frequency: '', period: '', keyQuestions: [] };
 
@@ -83,8 +84,9 @@ export default function NewProject() {
               </div>
             </Section>
             <Section title="The dashboard" hint="What it should monitor, how to break it down, and which filters people need.">
-              <textarea className="input min-h-[7.5rem] leading-relaxed" rows={5} value={narrative} onChange={(e) => setNarrative(e.target.value)} placeholder="Track monthly revenue and order volume by region and product line, compare with the previous period, and let managers filter by channel and region." />
+              <textarea className="input min-h-[7.5rem] leading-relaxed" rows={Math.min(18, Math.max(5, narrative.split('\n').length + 1))} value={narrative} onChange={(e) => setNarrative(e.target.value)} placeholder="Track monthly revenue and order volume by region and product line, compare with the previous period, and let managers filter by channel and region." />
               <div className="mt-1 text-xs text-slate-400">{narrative.trim() ? `${narrative.trim().split(/\s+/).length} words` : 'You can also leave this empty and describe it in the chat.'}</div>
+              <MockupUpload onText={(t) => setNarrative((n) => (n.trim() ? `${n.trimEnd()}\n\n${t}` : t))} />
             </Section>
           </div>
           <div className="flex items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-slate-50/60 px-6 py-3">

@@ -70,7 +70,9 @@ export function engineDisplay(engine: string | undefined): string {
 
 export const engineLabel = () => (aiActive() ? `Azure AI Foundry · ${useAI.getState().model}` : DETERMINISTIC);
 
-type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
+/** A part of a message: text, or an image sent inline as a `data:image/...;base64,` URL. */
+export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } };
+type Msg = { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] };
 
 export async function chat(messages: Msg[], opts: { temperature?: number; maxTokens?: number } = {}): Promise<string> {
   const r = await fetch('api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages, ...opts }) });
@@ -89,8 +91,10 @@ export function parseJsonLoose<T>(text: string): T {
   return JSON.parse(src.slice(start, end + 1)) as T;
 }
 
-export async function chatJSON<T>(system: string, user: string, opts: { maxTokens?: number } = {}): Promise<T> {
-  const messages: Msg[] = [{ role: 'system', content: `${system}\nRespond with a single valid JSON object only — no prose, no markdown.` }, { role: 'user', content: user }];
+/** `images` (data URLs) are sent with the user message, in high detail; without them the message is plain text, as before. */
+export async function chatJSON<T>(system: string, user: string, opts: { maxTokens?: number; images?: string[] } = {}): Promise<T> {
+  const userContent: Msg['content'] = opts.images?.length ? [{ type: 'text', text: user }, ...opts.images.map((url): ContentPart => ({ type: 'image_url', image_url: { url, detail: 'high' } }))] : user;
+  const messages: Msg[] = [{ role: 'system', content: `${system}\nRespond with a single valid JSON object only — no prose, no markdown.` }, { role: 'user', content: userContent }];
   const max = opts.maxTokens ?? 2500;
   const text = await chat(messages, { temperature: 0.1, maxTokens: max });
   try {
