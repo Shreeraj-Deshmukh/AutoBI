@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { HashRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { useEffect } from 'react';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -12,11 +12,10 @@ import DashboardPreview from './pages/DashboardPreview';
 import { ensureDemo } from './store/seed';
 import { initAI } from './agents/llm';
 
-/** Every page needs a signed-in user; others go to sign-in and come back to the page they asked for. */
+/** Every page needs a signed-in user; others go to sign-in, which then opens the homepage. */
 function RequireAuth() {
   const user = useAuth((s) => s.user);
-  const loc = useLocation();
-  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
+  if (!user) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 

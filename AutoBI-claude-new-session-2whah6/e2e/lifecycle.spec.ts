@@ -24,13 +24,16 @@ test.beforeEach(async ({ page }, info) => {
   }, !info.title.startsWith('sign-in'));
 });
 
-test('sign-in page gates the app and returns to the page asked for', async ({ page }) => {
+test('sign-in page gates the app and always opens the homepage', async ({ page }) => {
   await page.goto('/#/projects');
   await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByText(/being set up/i)).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign in with Microsoft' }).click();
-  await expect(page).toHaveURL(/#\/projects$/);
+  await expect(page).toHaveURL(/#\/$/);
+  await page.goto('/#/projects');
   await page.reload();
   await expect(page).toHaveURL(/#\/projects$/);
+  await expect(page.getByText('SSO pending')).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('button', { name: 'Sign in with Microsoft' })).toBeVisible();
 });

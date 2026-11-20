@@ -1,5 +1,5 @@
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Info, ShieldCheck } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/Layout';
 import BrandLogo from '@/components/BrandLogo';
 import { STAGES } from '@/agents/registry';
@@ -19,15 +19,14 @@ function MicrosoftMark() {
 
 export default function Login() {
   const nav = useNavigate();
-  const loc = useLocation();
   const user = useAuth((s) => s.user);
   const signIn = useAuth((s) => s.signIn);
-  const from = (loc.state as { from?: string } | null)?.from || '/';
-  if (user) return <Navigate to={from} replace />;
+  // signing in always lands on the AutoBI homepage, whatever page was asked for
+  if (user) return <Navigate to="/" replace />;
 
   const go = () => {
     signIn();
-    nav(from, { replace: true });
+    nav('/', { replace: true });
   };
 
   return (
@@ -68,11 +67,6 @@ export default function Login() {
             <MicrosoftMark />
             Sign in with Microsoft
           </button>
-
-          <div className="mt-4 flex gap-2.5 rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2.5 text-xs leading-relaxed text-slate-600">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-600" />
-            <span>Single sign-on with Microsoft Entra ID is being set up. Until then, this button signs you in directly.</span>
-          </div>
 
           <div className="mt-10 flex items-center gap-2 border-t border-slate-200 pt-5 text-xs text-slate-500">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-slate-400" />
