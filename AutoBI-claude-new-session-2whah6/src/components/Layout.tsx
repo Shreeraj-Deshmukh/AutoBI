@@ -76,7 +76,7 @@ function UserChip({ collapsed }: { collapsed?: boolean }) {
       {avatar}
       <div className="min-w-0 flex-1 text-[0.6875rem]">
         <div className="truncate font-medium text-white">{user.name}</div>
-        <div className="truncate text-slate-400">{user.email ?? (user.method === 'demo' ? 'Signed in (SSO pending)' : 'Signed in')}</div>
+        <div className="truncate text-slate-400">{user.email ?? 'Signed in'}</div>
       </div>
       <button onClick={signOut} title="Sign out" aria-label="Sign out" className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-white">
         <LogOut className="h-4 w-4" />
